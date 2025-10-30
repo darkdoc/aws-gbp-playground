@@ -1,0 +1,15 @@
+---
+aws_profile: "default"
+
+ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
+
+
+
+
+ocp_region: "eu-central-1"
+
+frr_router_ssh_key_name: aeros-ssh-key-rsa
+frr_router_user_password: changeme
+frr_router_instance_type: t2.micro
+frr_router_primary_ip: 10.0.0.100 # TODO get this dynamically
+frr_router_ami_image_id: ami-005c89b47f40aa0e1 # rhel10

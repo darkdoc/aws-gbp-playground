@@ -1,0 +1,21 @@
+frr version 10.6-dev_git20251028
+frr defaults traditional
+hostname frr-upstream
+log file /tmp/frr.log
+log timestamp precision 3
+!
+debug zebra nht
+debug bgp neighbor-events
+debug bgp nht
+debug bgp updates in
+debug bgp updates out
+debug bfd peer
+!
+interface enX0
+ ip address {{ frr_router_primary_ip }}/24
+exit
+!
+router bgp 64521
+ bgp router-id {{ frr_router_primary_ip }}
+exit
+!
