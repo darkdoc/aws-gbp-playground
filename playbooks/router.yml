@@ -21,6 +21,11 @@
       ansible.builtin.debug:
         msg: "Region: {{ ocp_region }} - AWS Profile: {{ aws_profile }} OCP owner: {{ ocp_owner }}"
 
+    - name: Get worker node ip list
+      ansible.builtin.shell: |
+        oc describe nodes -l node-role.kubernetes.io/worker | grep InternalIP: | awk {' print $2 '}
+      register: worker_nodes
+
     - name: Create key pair to access ec2 with ssh
       amazon.aws.ec2_key:
         profile: "{{ aws_profile }}"
@@ -106,14 +111,17 @@
         image_id: "{{ frr_router_ami_image_id }}"
         user_data: |
           #cloud-config
-              #cloud-config
           chpasswd:
             expire: false
           password: {{ frr_router_user_password }}
+          ssh_pwauth: true
           user: ec2-user
           packages:
           - tmux
+          - nc
+          - traceroute
           - vim
+          - frr
           write_files:
           - content: !!binary |
               "{{ lookup('template', '../templates/daemons.j2') | b64encode }}"
@@ -125,5 +133,6 @@
               "{{ lookup('template', '../templates/vtysh.conf.j2') | b64encode }}"
             path: /etc/frr/vtysh.conf
           runcmd:
-          - podman run -d --rm  -v /etc/frr:/etc/frr:Z --net=host --name frr-upstream --privileged quay.io/frrouting/frr:master
-
+          - [ systemctl, daemon-reload ]
+          - [ systemctl, enable, frr.service ]
+          - [ systemctl, start, --no-block, frr.service ]

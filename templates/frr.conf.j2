@@ -1,7 +1,5 @@
-frr version 10.6-dev_git20251028
 frr defaults traditional
-hostname frr-upstream
-log file /tmp/frr.log
+log file /var/log/frr/frr.log
 log timestamp precision 3
 !
 debug zebra nht
@@ -15,7 +13,25 @@ interface enX0
  ip address {{ frr_router_primary_ip }}/24
 exit
 !
-router bgp 64521
+router bgp 64512
+ timers bgp 3 15
+ no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
+ no bgp network import-check
  bgp router-id {{ frr_router_primary_ip }}
 exit
+!
+
+ neighbor metallb peer-group
+ neighbor metallb remote-as 65001
+{% for worker_node in worker_nodes.stdout_lines %}
+ neighbor {{ worker_node }} peer-group metallb
+ neighbor {{ worker_node }} bfd
+{% endfor -%}
+ address-family ipv4 unicast
+{% for worker_node in worker_nodes.stdout_lines %}
+    neighbor {{ worker_node }} next-hop-self
+    neighbor {{ worker_node }} activate
+{% endfor -%}
+ exit-address-family
 !
