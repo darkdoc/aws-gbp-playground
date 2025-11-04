@@ -1,5 +1,5 @@
 ---
-- name: Playbook to set up the FRR router ec2 in aws
+- name: Playbook to set up the BGP routing with a client ec2 in aws
   hosts: localhost
   gather_facts: false
   become: false
@@ -30,7 +30,7 @@
       amazon.aws.ec2_key:
         profile: "{{ aws_profile }}"
         region: "{{ ocp_region }}"
-        name: "{{ frr_router_ssh_key_name }}"
+        name: "{{ test_client_ec2_ssh_key_name }}"
         key_material: "{{ ssh_pubkey }}"
 
     - name: Gather security group info for workers
@@ -67,8 +67,8 @@
       amazon.aws.ec2_security_group:
         profile: "{{ aws_profile }}"
         region: "{{ ocp_region }}"
-        name: frr-router-security-group
-        description: sec group for frr router ec2
+        name: test-client-security-group
+        description: sec group for test client
         vpc_id: "{{ sg_vpc_id }}"
         rules:
         - proto: tcp
@@ -76,63 +76,151 @@
             - 22
           group_id: "{{ sg_group_id }}"
           rule_desc: allow ssh from the ocp workers to debug
-        - proto: tcp
-          ports:
-            - 179
-          group_id: "{{ sg_group_id }}"
-          rule_desc: allow BGP for ocp worker nodes
-        - proto: udp
-          ports:
-            - 3784
-          group_id: "{{ sg_group_id }}"
-          rule_desc: allow BFD for ocp worker nodes
-        - proto: udp
-          ports:
-            - 3785
-          group_id: "{{ sg_group_id }}"
-          rule_desc: allow BFD for ocp worker nodes
 
     - name: Start an instance with EBS
       amazon.aws.ec2_instance:
         profile: "{{ aws_profile }}"
         region: "{{ ocp_region }}"
-        name: "frr-router-{{ ocp_owner }}"
+        name: "test-client-{{ ocp_owner }}"
         state: started
         wait: true
         vpc_subnet_id: "{{ public_subnet_id }}"
-        instance_type: "{{ frr_router_instance_type }}"
-        key_name: "{{ frr_router_ssh_key_name }}"
-        security_group: frr-router-security-group
+        instance_type: "{{ test_client_ec2_instance_type }}"
+        key_name: "{{ test_client_ec2_ssh_key_name }}"
+        security_group: test-client-security-group
         network_interfaces:
           - assign_public_ip: false
             private_ip_addresses:
             - primary: true
-              private_ip_address: "{{ frr_router_primary_ip }}"
-        image_id: "{{ frr_router_ami_image_id }}"
+              private_ip_address: "{{ test_client_ec2_primary_ip }}"
+        image_id: "{{ test_client_ec2_ami_image_id }}"
         user_data: |
           #cloud-config
           chpasswd:
             expire: false
-          password: {{ frr_router_user_password }}
+          password: {{ test_client_ec2_user_password }}
           ssh_pwauth: true
           user: ec2-user
           packages:
           - tmux
           - nc
           - traceroute
+          - tcpdump
           - vim
-          - frr
-          write_files:
-          - content: !!binary |
-              "{{ lookup('template', '../templates/daemons.j2') | b64encode }}"
-            path: /etc/frr/daemons
-          - content: !!binary |
-              "{{ lookup('template', '../templates/frr.conf.j2') | b64encode }}"
-            path: /etc/frr/frr.conf
-          - content: !!binary |
-              "{{ lookup('template', '../templates/vtysh.conf.j2') | b64encode }}"
-            path: /etc/frr/vtysh.conf
-          runcmd:
-          - [ systemctl, daemon-reload ]
-          - [ systemctl, enable, frr.service ]
-          - [ systemctl, start, --no-block, frr.service ]
+
+    - name: Get route server
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-servers \
+        --filters Name=tag:Name,Values=test-routeserver-{{ ocp_owner }} \
+        --output json --no-cli-pager
+      register: aws_route_server_raw
+
+    - name: Create route server if it does not exists
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server \
+        --amazon-side-asn {{ aws_route_server_asn }} \
+        --tag-specifications ResourceType=route-server,Tags=\[\{Key=Name,Value=test-routeserver-{{ ocp_owner }}\}\] \
+        --output json --no-cli-pager
+      when: aws_route_server['RouteServers'] | length == 0
+      vars:
+       aws_route_server: "{{ aws_route_server_raw.stdout | from_yaml }}"
+      register: aws_route_server_raw_created
+
+      # TODO: fix me
+    - name: Set the id of the route server (created now)
+      ansible.builtin.set_fact:
+        aws_route_server_id: "{{ aws_route_server['RouteServers'] | map(attribute='RouteServerId') | first }}"
+      vars:
+        aws_route_server: "{{ aws_route_server_raw_created.stdout | from_yaml }}"
+      when: aws_route_server_raw_created is changed
+
+    - name: Set the id of the route server (created earlier)
+      ansible.builtin.set_fact:
+        aws_route_server_id: "{{ aws_route_server['RouteServers'] | map(attribute='RouteServerId') | first }}"
+      vars:
+        aws_route_server: "{{ aws_route_server_raw.stdout | from_yaml }}"
+      when: aws_route_server_raw_created is skipped
+
+    - name: Associate route server with vpc
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 associate-route-server \
+        --route-server-id {{ aws_route_server_id }} \
+        --vpc-id {{ sg_vpc_id }}
+
+    - name: Get route server endpoint
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-server-endpoints \
+        --filters Name=tag:Name,Values=test-routeserver-endpoint-{{ ocp_owner }} \
+        --output json --no-cli-pager
+      register: aws_route_get_server_endpoint_raw
+
+    - name: Create route server endpoint in a subnet in the vpc if it does not exists
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server-endpoint \
+        --route-server-id {{ aws_route_server_id }} \
+        --subnet-id {{ public_subnet_id }} \
+        --tag-specifications ResourceType=route-server-endpoint,Tags=\[\{Key=Name,Value=test-routeserver-endpoint-{{ ocp_owner }}\}\] \
+        --output json --no-cli-pager
+      register: aws_route_server_endpoint_created_raw
+      when: aws_route_server_endpoint['RouteServerEndpoints'] | length == 0
+      vars:
+       aws_route_server_endpoint: "{{ aws_route_get_server_endpoint_raw.stdout | from_yaml }}"
+
+    - name: Print IP address of the route server endpoint (created now)
+      ansible.builtin.debug:
+        msg: "IP: {{ aws_route_get_server_endpoint }}"
+      when: aws_route_server_endpoint_created_raw is changed
+      vars:
+        aws_route_get_server_endpoint: "{{ aws_route_server_endpoint_created_raw.stdout | from_yaml }}"
+
+    - name: Print IP address of the route server endpoint (created earlier)
+      ansible.builtin.debug:
+        msg: "IP: {{ aws_route_get_server_endpoint['RouteServerEndpoints'] | map(attribute='EniAddress') | first }}"
+      when: aws_route_server_endpoint_created_raw is skipped
+      vars:
+        aws_route_get_server_endpoint: "{{ aws_route_get_server_endpoint_raw.stdout | from_yaml }}"
+
+    # TODO: fix me
+    - name: Set the id of the route server endpoint (created now)
+      ansible.builtin.set_fact:
+        rse_id: "{{ aws_route_get_server_endpoint['RouteServerEndpoint'] | map(attribute='RouteServerEndpointId') | first }}"
+      vars:
+        aws_route_get_server_endpoint: "{{ aws_route_server_endpoint_created_raw.stdout | from_yaml }}"
+      when: aws_route_server_endpoint_created_raw is changed
+
+    - name: Set the id of the route server endpoint (created earlier)
+      ansible.builtin.set_fact:
+        rse_id: "{{ aws_route_get_server_endpoint['RouteServerEndpoints'] | map(attribute='RouteServerEndpointId') | first }}"
+      vars:
+        aws_route_get_server_endpoint: "{{ aws_route_get_server_endpoint_raw.stdout | from_yaml }}"
+      when: aws_route_server_endpoint_created_raw is skipped
+
+    # TODO wait for route server endpoint state to be ready
+    - name: Create route server peers for each worker node
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server-peer \
+        --route-server-endpoint-id {{ rse_id }} --peer-address {{ item }} --bgp-options PeerAsn={{ metallb_asn }},PeerLivenessDetection=bgp-keepalive \
+        --tag-specifications ResourceType=route-server-peer,Tags=\[\{Key=Name,Value=node-{{ item }}\}\] \
+        --output json --no-cli-pager
+      loop: "{{ worker_nodes.stdout_lines }}"
+
+    - name: Get route table id-s for vpc
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-tables \
+        --filters Name=vpc-id,Values={{ sg_vpc_id }} \
+        --output json --no-cli-pager
+      register: route_tables_raw
+
+    - name: Set route table id-s for vpc
+      ansible.builtin.set_fact:
+        route_table_ids: "{{ rt['RouteTables'] | map(attribute='RouteTableId') | list }}"
+      vars:
+        rt: "{{ route_tables_raw.stdout | from_yaml }}"
+
+    - name: Create route server propagation for each worker node subnet
+      ansible.builtin.shell: |
+        aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 enable-route-server-propagation \
+        --route-server-id {{ aws_route_server_id }} \
+        --route-table-id {{ item }} \
+        --output json --no-cli-pager
+      loop: "{{ route_table_ids }}"
