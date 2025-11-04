@@ -2,11 +2,12 @@
 aws_profile: "default"
 aws_region: "eu-central-1"
 
+
 ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
 
 
 
-
+ocp_cluster_name: aeros-vp-hub
 ocp_region: "eu-central-1"
 
 aws_route_server_asn: 64512
