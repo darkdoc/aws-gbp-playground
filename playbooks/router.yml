@@ -42,8 +42,10 @@
       ansible.builtin.set_fact:
         sg_vpc_id: "{{ sg_info.security_groups[0].vpc_id }}"
         sg_group_id: "{{ sg_info.security_groups[0].group_id }}"
+        sg_group_name: "{{ sg_info.security_groups[0].group_name }}"
+        sg_worker_description: "{{ sg_info.security_groups[0].description }}"
 
-    - name: Gather vpc info for workers
+    - name: Gather vpc subnet info for workers
       amazon.aws.ec2_vpc_subnet_info:
         profile: "{{ aws_profile }}"
         region: "{{ ocp_region }}"
@@ -54,6 +56,30 @@
     - name: Set public subnet id
       ansible.builtin.set_fact: # only add the public subnet, and there will be only exactly one
         public_subnet_id: "{{ subnet_info.subnets |  selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
+
+    - name: Open up worker node security groups
+      amazon.aws.ec2_security_group:
+        profile: "{{ aws_profile }}"
+        region: "{{ ocp_region }}"
+        name: "{{ sg_group_name }}"
+        description: "{{ sg_worker_description }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 179
+            cidr_ip: 10.0.0.0/16 # TODO: get this from the vpc
+            rule_desc: BGP port
+          - proto: tcp
+            ports:
+              - 80
+            cidr_ip: 10.0.0.0/16
+            rule_desc: HTTP for testing
+          - proto: udp
+            ports:
+              - 3784
+            cidr_ip: 10.0.0.0/16
+            rule_desc: BFD port
+        purge_rules: false
 
     - name: Print AWS infos
       ansible.builtin.debug:
