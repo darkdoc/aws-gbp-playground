@@ -62,6 +62,24 @@
       ansible.builtin.debug:
         msg: "subnet: {{ public_subnet_id }}"
 
+    - name: Get NICs for a vpc
+      amazon.aws.ec2_eni_info:
+        profile: "{{ aws_profile }}"
+        region: "{{ aws_region }}"
+        filters:
+          vpc-id: "{{ sg_vpc_id }}"
+          interface-type: interface
+      register: aws_enis
+
+    # Modify the each worker node interface to disable source/dest check (needed for the ip address not on the vpc)
+    - name: Disable source/dest check on worker node NIC-s
+      amazon.aws.ec2_eni:
+        profile: "{{ aws_profile }}"
+        region: "{{ aws_region }}"
+        source_dest_check: false
+        eni_id: "{{ item['id'] }}"
+      when: item['private_ip_address'] in worker_nodes.stdout_lines
+      loop: "{{ aws_enis['network_interfaces'] }}"
 
     - name: Create ec2 security group
       amazon.aws.ec2_security_group:
