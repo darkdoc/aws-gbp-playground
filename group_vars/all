@@ -13,6 +13,10 @@ ocp_region: "eu-central-1"
 aws_route_server_asn: 64512
 
 metallb_asn: 65001
+#TODO: changing this requires a redeploy (cleanup)
+metallb_bfd: false # TODO: currently not working if set to true, bdf wont be healthy
+
+aws_route_server_peer_detection: "{{ 'bfd' if metallb_bfd else 'bgp-keepalive' }}"
 
 test_client_ec2_ssh_key_name: aeros-ssh-key-rsa
 test_client_ec2_user_password: changeme

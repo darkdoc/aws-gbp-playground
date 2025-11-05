@@ -230,7 +230,7 @@
     - name: Create route server peers for each worker node
       ansible.builtin.shell: |
         aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server-peer \
-        --route-server-endpoint-id {{ rse_id }} --peer-address {{ item }} --bgp-options PeerAsn={{ metallb_asn }},PeerLivenessDetection=bgp-keepalive \
+        --route-server-endpoint-id {{ rse_id }} --peer-address {{ item }} --bgp-options PeerAsn={{ metallb_asn }},PeerLivenessDetection={{ aws_route_server_peer_detection }} \
         --tag-specifications ResourceType=route-server-peer,Tags=\[\{Key=Name,Value={{ ocp_cluster_name }}-node-{{ item }}\}\] \
         --output json --no-cli-pager
       loop: "{{ worker_nodes.stdout_lines }}"
