@@ -66,7 +66,7 @@
           route_server_endpoint_id: "{{ get_route_server_endpoint['RouteServerEndpoints'] | map(attribute='RouteServerEndpointId') | first }}"
         vars:
           get_route_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
-
+      # TODO: wait here for all peers to be deleted
       - name: Delete route server endpoint (if not deleted)
         ansible.builtin.shell: |
           aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 delete-route-server-endpoint \
@@ -128,7 +128,7 @@
           --vpc-id {{ vpc_id }}
         when:
           - get_route_server_association_raw is not failed
-          - get_route_seget_route_server_association['RouteServerAssociations'] | map(attribute='State') | first) == 'associated'
+          - (get_route_seget_route_server_association['RouteServerAssociations'] | map(attribute='State') | first) == 'associated'
         vars:
           get_route_seget_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
 
@@ -137,7 +137,7 @@
           aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 delete-route-server \
           --route-server-id {{ route_server_id }} \
           --output json --no-cli-pager
-        when: get_route_server['RouteServers'] | map(attribute='State') == 'available'
+        when: (get_route_server['RouteServers'] | map(attribute='State') | first) == 'available'
         vars:
           get_route_server: "{{ get_route_server_raw.stdout | from_yaml }}"
 
