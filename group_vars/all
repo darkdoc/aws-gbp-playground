@@ -2,6 +2,9 @@
 aws_profile: "default"
 aws_region: "eu-central-1"
 
+aws_ami_owner: 309956199498
+aws_ami_name: "RHEL-10*"
+
 
 ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
 
@@ -22,4 +25,3 @@ test_client_ec2_ssh_key_name: aeros-ssh-key-rsa
 test_client_ec2_user_password: changeme
 test_client_ec2_instance_type: t2.micro
 test_client_ec2_primary_ip: 10.0.0.100 # TODO get this dynamically
-test_client_ec2_ami_image_id: ami-005c89b47f40aa0e1 # rhel10
