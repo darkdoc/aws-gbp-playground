@@ -147,11 +147,6 @@
         instance_type: "{{ test_client_ec2_instance_type }}"
         key_name: "{{ test_client_ec2_ssh_key_name }}"
         security_group: test-client-{{ ocp_cluster_name }}-security-group
-        network_interfaces:
-          - assign_public_ip: false
-            private_ip_addresses:
-            - primary: true
-              private_ip_address: "{{ test_client_ec2_primary_ip }}"
         image_id: "{{ test_client_ec2_ami_image_id }}"
         user_data: |
           #cloud-config

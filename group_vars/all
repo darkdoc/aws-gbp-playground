@@ -24,4 +24,4 @@ aws_route_server_peer_detection: "{{ 'bfd' if metallb_bfd else 'bgp-keepalive' }
 test_client_ec2_ssh_key_name: aeros-ssh-key-rsa
 test_client_ec2_user_password: changeme
 test_client_ec2_instance_type: t2.micro
-test_client_ec2_primary_ip: 10.0.0.100 # TODO get this dynamically
+test_client_ec2_ami_image_id: ami-005c89b47f40aa0e1 # rhel10
