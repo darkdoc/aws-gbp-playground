@@ -47,6 +47,7 @@
 - name: Set full var public subnet id for "{{ ocp.name }}"
   ansible.builtin.set_fact: # only add the public subnet, and there will be only exactly one
     "{{ ocp.name }}_public_subnet_id": "{{ ec2_vpc_subnet_info.subnets | selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
+    "{{ ocp.name }}_vpc_id": "{{ ec2_security_group_info.security_groups[0].vpc_id }}"
 
 - name: Debug subnet for "{{ ocp.name }}"
   ansible.builtin.debug:

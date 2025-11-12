@@ -64,9 +64,10 @@
 
     - name: Ensure security group exists
       amazon.aws.ec2_group:
-        name: "test-client-{{ aws_arn_userid }}-internet"
+        name: "internet-{{ aws_arn_userid }}"
         description: "security group to allow internet access to the client"
         region: "{{ aws_region }}"
+        vpc_id: "{{ hub_vpc_id }}"
         profile: "{{ aws_profile }}"
         rules:
           - proto: tcp
@@ -86,7 +87,7 @@
         vpc_subnet_id: "{{ hub_public_subnet_id }}"
         instance_type: "{{ test_client_ec2_instance_type }}"
         key_name: "{{ test_client_ec2_ssh_key_name }}"
-        security_group: "test-client-{{ aws_arn_userid }}-internet"
+        security_group: "{{ sg.group_id }}"
         image_id: "{{ test_client_ec2_ami_image_id }}"
         network:
           assign_public_ip: true
@@ -167,9 +168,9 @@
     - name: Create ENI in spoke's vpc subnet
       amazon.aws.ec2_eni:
         profile: "{{ aws_profile }}"
-        subnet_id: "{{ spoke_public_subnet_id }}" # ⬅️ Subnet in VPC B, but same AZ
-        security_groups: "test-client-spoke-security-group"
         region: "{{ aws_region }}"
+        subnet_id: "{{ spoke_public_subnet_id }}" # ⬅️ Subnet in VPC B, but same AZ
+        security_groups: "test-client-test-{{ spoke_cluster_name }}-security-group"
         tags:
           Name: "Spoke-vpc-nic"
       register: eni_info
@@ -177,6 +178,7 @@
     - name: Attach the Secondary ENI to the Instance
       amazon.aws.ec2_eni:
         profile: "{{ aws_profile }}"
+        region: "{{ aws_region }}"
         eni_id: "{{ eni_info.eni.id }}"
         instance_id: "{{ client_instance_info.instance_ids[0] }}"
         device_index: 1  # ⬅️ Must be 1 or greater for a secondary NIC
