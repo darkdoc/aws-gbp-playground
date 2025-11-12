@@ -13,9 +13,95 @@
         profile: "{{ aws_profile }}"
       register: aws_caller_info
 
-    - name: Print AWS infos
+    - name: Set AWS ARN User ID
+      ansible.builtin.set_fact:
+        aws_arn_userid: "{{ aws_caller_info.arn | split('/') | last }}"
+
+    - name: Set AWS ec2 ssh key name
+      ansible.builtin.set_fact:
+        test_client_ec2_ssh_key_name: "{{ aws_arn_userid }}-ssh-key-rsa"
+
+    - name: Set HUBCONFIG and SPOKECONFIG facts from env variables
+      ansible.builtin.set_fact:
+        HUBCONFIG: "{{ lookup('env', 'HUBCONFIG') }}"
+        SPOKECONFIG: "{{ lookup('env', 'SPOKECONFIG') }}"
+
+    - name: Check for correct HUBCONFIG variable
+      ansible.builtin.fail:
+        msg: "HUBCONFIG variable needs to be set and pointing to the HUB kubeconfig file"
+      when:
+        HUBCONFIG is not defined or HUBCONFIG | length == 0
+
+    - name: Check for correct SPOKECONFIG env variable
+      ansible.builtin.fail:
+        msg: "SPOKECONFIG variable needs to be set and pointing to the REGION kubeconfig file"
+      when:
+        SPOKECONFIG is not defined or SPOKECONFIG | length == 0
+
+    - name: Show the two cluster kubeconfig paths
       ansible.builtin.debug:
-        msg: "Region: {{ ocp_region }} - AWS Profile: {{ aws_profile }} OCP owner: {{ ocp_cluster_name }}"
+        msg: "HUBCONFIG: {{ HUBCONFIG }} - SPOKECONFIG: {{ SPOKECONFIG }}"
+
+    - name: Check that both clusters are reachable
+      ansible.builtin.shell: |
+        oc cluster-info
+      environment:
+        KUBECONFIG: "{{ item }}"
+      loop:
+        - "{{ HUBCONFIG }}"
+        - "{{ SPOKECONFIG }}"
+
+    - name: Get cluster route for HUB
+      ansible.builtin.shell: |
+        oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}' 
+      environment:
+        KUBECONFIG: "{{ HUBCONFIG }}"
+      register:
+        hub_route_raw
+
+    - name: Get cluster route for REGION
+      ansible.builtin.shell: |
+        oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}' 
+      environment:
+        KUBECONFIG: "{{ SPOKECONFIG }}"
+      register:
+        spoke_route_raw
+
+    - name: Get hub cluster's aws region
+      ansible.builtin.shell: |
+        oc get infrastructure cluster -o jsonpath='{.status.platformStatus.aws.region}'
+      environment:
+        KUBECONFIG: "{{ HUBCONFIG }}"
+      register:
+        hub_aws_region
+
+    - name: Get spoke cluster's aws region
+      ansible.builtin.shell: |
+        oc get infrastructure cluster -o jsonpath='{.status.platformStatus.aws.region}'
+      environment:
+        KUBECONFIG: "{{ SPOKECONFIG }}"
+      register:
+        spoke_aws_region
+
+    - name: We only support clusters in the same region
+      ansible.builtin.assert:
+        that:
+          - spoke_aws_region.stdout == hub_aws_region.stdout
+        fail_msg: "FATAL: we do not support clusters in different regions for now"
+      # FIXME: for now we skip this check
+      failed_when: false
+
+    - name: Set cluster info
+      ansible.builtin.set_fact:
+        hub_cluster_name: "{{ (hub_route_raw.stdout | split('.'))[1] }}"
+        hub_fqdn: "{{ (hub_route_raw.stdout | split('.'))[1:] | join('.') }}"
+        spoke_cluster_name: "{{ (spoke_route_raw.stdout | split('.'))[1] }}"
+        spoke_fqdn: "{{ (spoke_route_raw.stdout | split('.'))[1:] | join('.') }}"
+        aws_region: "{{ hub_aws_region.stdout }}"
+
+    - name: Print AWS info
+      ansible.builtin.debug:
+        msg: "AWS User: {{ aws_arn_userid }} - AWS Region: {{ aws_region }} - AWS Profile: {{ aws_profile }} - Hub: {{ hub_cluster_name }} - Spoke: {{ spoke_cluster_name }}"
 
     - name: Get ami image
       ansible.builtin.shell: |
@@ -35,22 +121,39 @@
       ansible.builtin.debug:
         msg: "Using AMI image: {{ test_client_ec2_ami_image_id }}"
 
-    - name: Get worker node ip list
+    - ansible.builtin.fail:
+        msg: "{{ hub_cluster_name }}/{{ hub_fqdn }} - {{ spoke_cluster_name }}/{{ spoke_fqdn }}"
+
+    - name: Get hub worker node ip list
       ansible.builtin.shell: |
         oc describe nodes -l node-role.kubernetes.io/worker | grep InternalIP: | awk {' print $2 '}
-      register: worker_nodes
+      environment:
+        KUBECONFIG: "{{ HUBCONFIG }}"
+      register: hub_worker_nodes
+
+    - name: Get spoke worker node ip list
+      ansible.builtin.shell: |
+        oc describe nodes -l node-role.kubernetes.io/worker | grep InternalIP: | awk {' print $2 '}
+      environment:
+        KUBECONFIG: "{{ SPOKECONFIG }}"
+      register: spoke_worker_nodes
+
+
+    - ansible.builtin.fail:
+        message: "STOP"
+
 
     - name: Create key pair to access ec2 with ssh
       amazon.aws.ec2_key:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         name: "{{ test_client_ec2_ssh_key_name }}"
         key_material: "{{ ssh_pubkey }}"
 
     - name: Gather security group info for workers
       amazon.aws.ec2_security_group_info:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         filters:
           "tag:sigs.k8s.io/cluster-api-provider-aws/role": "node"
           "tag:Name": "{{ ocp_cluster_name }}-*"
@@ -66,7 +169,7 @@
     - name: Gather vpc subnet info for workers
       amazon.aws.ec2_vpc_subnet_info:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         filters:
           vpc-id: "{{ sg_vpc_id }}"
       register: ec2_vpc_subnet_info
@@ -78,7 +181,7 @@
     - name: Open up worker node security groups
       amazon.aws.ec2_security_group:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         name: "{{ sg_group_name }}"
         description: "{{ sg_worker_description }}"
         rules:
@@ -125,7 +228,7 @@
     - name: Create ec2 security group
       amazon.aws.ec2_security_group:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         name: test-client-{{ ocp_cluster_name }}-security-group
         description: sec group for test client
         vpc_id: "{{ sg_vpc_id }}"
@@ -139,7 +242,7 @@
     - name: Start an ec2 instance (test-client)
       amazon.aws.ec2_instance:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         name: "test-client-{{ ocp_cluster_name }}"
         state: started
         wait: true

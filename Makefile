@@ -1,7 +1,11 @@
 
 EXTRA_VARS ?=
 
-EXTRA_ARGS = -e @./overrides.yml 
+ifeq ($(wildcard overrides.yml),overrides.yml)
+    EXTRA_ARGS := -e @./overrides.yml
+else
+    EXTRA_ARGS :=
+endif
 
 ##@ Common Tasks
 .PHONY: help
@@ -19,5 +23,5 @@ bgp-routing-cleanup: ## Cleans up the BGP routing with a client ec2 in aws
 	ansible-playbook -i hosts $(EXTRA_ARGS) $(EXTRA_VARS) playbooks/router-cleanup.yml
 
 .PHONY: import
-import: ## Imports REGIONCONFIG into HUBCONFIG defined clusters
+import: ## Imports SPOKECONFIG into HUBCONFIG defined clusters
 	ansible-playbook -i hosts $(EXTRA_ARGS) $(EXTRA_VARS) playbooks/import-cluster.yml

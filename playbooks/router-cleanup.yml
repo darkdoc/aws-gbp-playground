@@ -13,10 +13,17 @@
         profile: "{{ aws_profile }}"
       register: aws_caller_info
 
+    - name: Set AWS ARN User ID
+      ansible.builtin.set_fact:
+        aws_arn_userid: "{{ aws_caller_info.arn | split('/') | last }}"
+
+    - name: Set AWS ec2 ssh key name
+      ansible.builtin.set_fact:
+        test_client_ec2_ssh_key_name: "{{ aws_arn_userid }}-ssh-key-rsa"
+
     - name: Print AWS infos
       ansible.builtin.debug:
-        msg: "Region: {{ ocp_region }} - AWS Profile: {{ aws_profile }} OCP owner: {{ ocp_cluster_name }}"
-
+        msg: "AWS Used: {{ aws_arn_userid }} - AWS Profile: {{ aws_profile }}"
 
     - name: Get route server
       ansible.builtin.shell: |
@@ -144,14 +151,14 @@
     - name: Delete created key pair
       amazon.aws.ec2_key:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         name: "{{ test_client_ec2_ssh_key_name }}"
         state: absent
 
     - name: Gather the ec2 instance details
       amazon.aws.ec2_instance_info:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         filters:
           "tag:Name": "test-client-{{ ocp_cluster_name }}"
       register: ec2_node_info
@@ -166,7 +173,7 @@
       - name: Delete ec2 instance
         amazon.aws.ec2_instance:
           profile: "{{ aws_profile }}"
-          region: "{{ ocp_region }}"
+          region: "{{ aws_region }}"
           instance_ids:
             - "{{ instance_id }}"
           state: terminated
@@ -174,6 +181,6 @@
     - name: Delete ec2 security group
       amazon.aws.ec2_security_group:
         profile: "{{ aws_profile }}"
-        region: "{{ ocp_region }}"
+        region: "{{ aws_region }}"
         name: test-client-{{ ocp_cluster_name }}-security-group
         state: absent
