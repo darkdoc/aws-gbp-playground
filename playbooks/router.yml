@@ -10,25 +10,8 @@
     - ../overrides.yml
 
   tasks:
-    - name: Get AWS caller identity for Owner tag
-      amazon.aws.aws_caller_info:
-        profile: "{{ aws_profile }}"
-      register: aws_caller_info
-
-    - name: Set AWS ARN User ID
-      ansible.builtin.set_fact:
-        aws_arn_userid: "{{ aws_caller_info.arn | split('/') | last }}"
-
-    - name: Set AWS ec2 ssh key name
-      ansible.builtin.set_fact:
-        test_client_ec2_ssh_key_name: "{{ aws_arn_userid }}-ssh-key-rsa"
-
     - name: Checks
       ansible.builtin.include_tasks: check_task.yml
-
-    - name: Print AWS info
-      ansible.builtin.debug:
-        msg: "AWS User: {{ aws_arn_userid }} - AWS Region: {{ aws_region }} - AWS Profile: {{ aws_profile }} - Hub: {{ hub_cluster_name }} - Spoke: {{ spoke_cluster_name }}"
 
     - name: Get ami image
       ansible.builtin.shell: |
