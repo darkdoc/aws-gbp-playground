@@ -178,13 +178,13 @@
 
 - name: Print IP address of the route server endpoint
   ansible.builtin.debug:
-    msg: "IP: {{ aws_route_get_server_endpoint['RouteServerEndpoints'] | map(attribute='EniAddress') | first }}"
+    msg: "IP: {{ aws_route_get_server_endpoint['RouteServerEndpoints'] | selectattr('State', 'equalto', 'available') | map(attribute='EniAddress') | first }}"
   vars:
     aws_route_get_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
 
 - name: Set the id of the route server endpoint
   ansible.builtin.set_fact:
-    rse_id: "{{ aws_route_get_server_endpoint['RouteServerEndpoints'] | map(attribute='RouteServerEndpointId') | first }}"
+    rse_id: "{{ aws_route_get_server_endpoint['RouteServerEndpoints'] | selectattr('State', 'equalto', 'available') | map(attribute='RouteServerEndpointId') | first }}"
   vars:
     aws_route_get_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
 
