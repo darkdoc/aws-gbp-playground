@@ -3,6 +3,7 @@ aws_profile: "default"
 
 aws_ami_owner: 309956199498
 aws_ami_name: "RHEL-10*"
+aws_ami_arch: "x86_64"
 
 ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
 
