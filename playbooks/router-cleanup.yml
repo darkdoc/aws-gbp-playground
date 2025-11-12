@@ -48,7 +48,7 @@
       block:
       - name: Set ec2 instance id
         ansible.builtin.set_fact:
-          instance_id: "{{ ec2_node_info.instances | map(attribute='instance_id') | first  }}"
+          instance_id: "{{ ec2_node_info.instances | map(attribute='instance_id') | first }}"
     
       - name: Delete ec2 instance
         amazon.aws.ec2_instance:
@@ -57,6 +57,30 @@
           instance_ids:
             - "{{ instance_id }}"
           state: terminated
+
+    - name: Set dns facts (1)
+      ansible.builtin.set_fact:
+        record_name: "bgp_{{ aws_arn_userid }}"
+
+    - name: Set dns facts (2)
+      ansible.builtin.set_fact:
+        fqdn: "{{ record_name }}.{{ hosted_zone | regex_replace('\n$','') }}"
+        fqdn_nodot: "{{ record_name }}.{{ hosted_zone | regex_replace('\n$','') | regex_replace('\\.$','') }}"
+
+    - name: Delete A record
+      amazon.aws.route53:
+        profile: "{{ aws_profile }}"
+        zone: "{{ hosted_zone }}"
+        record: "{{ fqdn }}"
+        type: A
+        state: absent
+
+    - name: Remove security group (ignore if attached)
+      amazon.aws.ec2_group:
+        profile: "{{ aws_profile }}"
+        name: "test-client-{{ aws_arn_userid }}-internet"
+        state: absent
+        region: "{{ aws_region }}"
 
     - ansible.builtin.include_tasks: cleanup_task.yml
       loop:

@@ -3,6 +3,8 @@
   hosts: localhost
   gather_facts: false
   become: false
+  vars:
+    wait_for_ssh_timeout: 600
   vars_files:
     # Use this to override stuff that won't be committed to git
     - ../overrides.yml
@@ -60,7 +62,20 @@
       loop_control:
         loop_var: ocp
 
-    - name: Start an ec2 instance (test-client) 
+    - name: Ensure security group exists
+      amazon.aws.ec2_group:
+        name: "test-client-{{ aws_arn_userid }}-internet"
+        description: "security group to allow internet access to the client"
+        region: "{{ aws_region }}"
+        profile: "{{ aws_profile }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: "{{ allow_cidrs }}"
+      register: sg
+
+    - name: Start an ec2 instance (test-client)
       amazon.aws.ec2_instance:
         profile: "{{ aws_profile }}"
         region: "{{ aws_region }}"
@@ -70,14 +85,14 @@
         vpc_subnet_id: "{{ hub_public_subnet_id }}"
         instance_type: "{{ test_client_ec2_instance_type }}"
         key_name: "{{ test_client_ec2_ssh_key_name }}"
-        security_group: "test-client-{{ hub_cluster_name }}-security-group"
+        security_group: "test-client-{{ aws_arn_userid }}-internet"
         image_id: "{{ test_client_ec2_ami_image_id }}"
+        network:
+          assign_public_ip: true
         user_data: |
           #cloud-config
           chpasswd:
             expire: false
-          password: {{ test_client_ec2_user_password }}
-          ssh_pwauth: true
           user: ec2-user
           packages:
           - tmux
@@ -87,9 +102,66 @@
           - vim
       register: client_instance_info
 
-    - name: Debug ec2 instance
+    - name: Set instance facts
+      ansible.builtin.set_fact:
+        client_public_ip: "{{ client_instance_info.instances[0].public_ip_address }}"
+        client_private_ip: "{{ client_instance_info.instances[0].private_ip_address }}"
+        client_instance_id: "{{ client_instance_info.instances[0].instance_id }}"
+
+    - name: Show instance details
       ansible.builtin.debug:
-        msg: "{{ client_instance_info }}"
+        msg:
+          public_ip: "{{ client_public_ip }}"
+          private_ip: "{{ client_private_ip }}"
+          instance_id: "{{ client_instance_id }}"
+          spoke_public_subnet_id: "{{ spoke_public_subnet_id }}"
+
+    - name: Set dns facts (1)
+      ansible.builtin.set_fact:
+        record_name: "bgp_{{ aws_arn_userid }}"
+
+    - name: Set dns facts (2)
+      ansible.builtin.set_fact:
+        fqdn: "{{ record_name }}.{{ hosted_zone | regex_replace('\n$','') }}"
+        fqdn_nodot: "{{ record_name }}.{{ hosted_zone | regex_replace('\n$','') | regex_replace('\\.$','') }}"
+
+    - name: Create/Update A record
+      amazon.aws.route53:
+        profile: "{{ aws_profile }}"
+        zone: "{{ hosted_zone }}"
+        record: "{{ fqdn }}"
+        type: A
+        ttl: 60
+        value: "{{ client_public_ip }}"
+        overwrite: true
+        state: present
+      register: r53
+
+    - name: Show DNS
+      ansible.builtin.debug:
+        msg:
+          fqdn: "{{ fqdn }}"
+          r53: "{{ r53 }}"
+
+    - name: Wait for SSH to be available
+      ansible.builtin.wait_for:
+        host: "{{ client_public_ip }}"
+        port: 22
+        timeout: "{{ wait_for_ssh_timeout }}"
+        state: started
+
+    - name: Fetch host key via ssh-keyscan ip
+      ansible.builtin.command: "ssh-keyscan -H {{ client_public_ip }}"
+      register: scanned_ip
+      changed_when: false
+
+    - name: Add new host to in-memory inventory
+      ansible.builtin.add_host:
+        name: "{{ fqdn_nodot }}"
+        ansible_host: "{{ client_public_ip }}"
+        groups: ["client_node"]
+        ansible_user: ec2-user
+        key: "{{ scanned_ip.stdout }}"
 
     - name: Create ENI in spoke's vpc subnet
       amazon.aws.ec2_eni:

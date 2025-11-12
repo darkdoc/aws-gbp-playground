@@ -9,13 +9,14 @@ ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
 
 aws_route_server_asn: 64512
 
+hosted_zone: aws.validatedpatterns.io.
+
 metallb_asn: 65001
 #TODO: changing this requires a redeploy (cleanup)
 metallb_bfd: false # TODO: currently not working if set to true, bdf wont be healthy
 
 aws_route_server_peer_detection: "{{ 'bfd' if metallb_bfd else 'bgp-keepalive' }}"
 
-test_client_ec2_user_password: "{{ lookup('file', '~/.test_ec2_password', errors='ignore') | default('12_Change-This-Password') }}"
 test_client_ec2_instance_type: t2.micro
 
 clustergroup_label: group-one
