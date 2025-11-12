@@ -61,7 +61,7 @@
     when: (get_route_server_endpoint['RouteServerEndpoints'] | map(attribute='State') | first) == 'available'
     vars:
       get_route_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
-    retries: 5
+    retries: 10
     delay: 10
 
   - name: Get route server propagations
@@ -91,8 +91,8 @@
     until: get_route_server_propagations['RouteServerPropagations'] | length == 0
     vars:
       get_route_server_propagations: "{{ get_route_server_propagations_raw.stdout | from_yaml }}"
-    retries: 5
-    delay: 5
+    retries: 10
+    delay: 10
 
   - name: Get route server association
     ansible.builtin.shell: |
@@ -119,8 +119,8 @@
       - (get_route_seget_route_server_association['RouteServerAssociations'] | map(attribute='State') | first) == 'associated'
     vars:
       get_route_seget_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
-    retries: 5
-    delay: 5
+    retries: 10
+    delay: 10
 
   - name: Delete route server
     ansible.builtin.shell: |
