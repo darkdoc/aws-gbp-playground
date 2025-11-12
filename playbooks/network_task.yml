@@ -107,7 +107,7 @@
       ports:
         - 22
       group_id: "{{ sg_group_id }}"
-      rule_desc: allow ssh from the ocp workers to debug
+      rule_desc: allow ssh from the ocp {{ ocp.cluster_name }} workers to debug
 
 - name: Get route server
   ansible.builtin.shell: |

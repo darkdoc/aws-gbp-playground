@@ -17,7 +17,6 @@
   vars:
     get_route_server: "{{ get_route_server_raw.stdout | from_yaml }}"
   block:
-
   - name: Get route server peers for each worker node
     ansible.builtin.shell: |
       aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-server-peers \
@@ -62,6 +61,8 @@
     when: (get_route_server_endpoint['RouteServerEndpoints'] | map(attribute='State') | first) == 'available'
     vars:
       get_route_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
+    retries: 5
+    delay: 10
 
   - name: Get route server propagations
     ansible.builtin.shell: |
@@ -118,6 +119,8 @@
       - (get_route_seget_route_server_association['RouteServerAssociations'] | map(attribute='State') | first) == 'associated'
     vars:
       get_route_seget_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
+    retries: 5
+    delay: 5
 
   - name: Delete route server
     ansible.builtin.shell: |

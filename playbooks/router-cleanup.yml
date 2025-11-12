@@ -21,80 +21,12 @@
       ansible.builtin.set_fact:
         test_client_ec2_ssh_key_name: "{{ aws_arn_userid }}-ssh-key-rsa"
 
+    - name: Checks
+      ansible.builtin.include_tasks: check_task.yml
+
     - name: Print AWS infos
       ansible.builtin.debug:
         msg: "AWS Used: {{ aws_arn_userid }} - AWS Profile: {{ aws_profile }}"
-
-    - name: Set HUBCONFIG and SPOKECONFIG facts from env variables
-      ansible.builtin.set_fact:
-        HUBCONFIG: "{{ lookup('env', 'HUBCONFIG') }}"
-        SPOKECONFIG: "{{ lookup('env', 'SPOKECONFIG') }}"
-
-    - name: Check for correct HUBCONFIG variable
-      ansible.builtin.fail:
-        msg: "HUBCONFIG variable needs to be set and pointing to the HUB kubeconfig file"
-      when:
-        HUBCONFIG is not defined or HUBCONFIG | length == 0
-
-    - name: Check for correct SPOKECONFIG env variable
-      ansible.builtin.fail:
-        msg: "SPOKECONFIG variable needs to be set and pointing to the REGION kubeconfig file"
-      when:
-        SPOKECONFIG is not defined or SPOKECONFIG | length == 0
-
-    - name: Show the two cluster kubeconfig paths
-      ansible.builtin.debug:
-        msg: "HUBCONFIG: {{ HUBCONFIG }} - SPOKECONFIG: {{ SPOKECONFIG }}"
-
-    - name: Get cluster routes and set facts
-      ansible.builtin.shell: |
-        oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}'
-      environment:
-        KUBECONFIG: "{{ item.config }}"
-      register: route_result
-      loop:
-        - { name: "hub", config: "{{ HUBCONFIG }}" }
-        - { name: "spoke", config: "{{ SPOKECONFIG }}" }
-    
-    - name: Set cluster route info dynamically
-      ansible.builtin.set_fact:
-        "{{ item.item.name }}_cluster_name": "{{ (item.stdout | split('.'))[1] }}"
-        "{{ item.item.name }}_fqdn": "{{ (item.stdout | split('.'))[1:] | join('.') }}"
-      loop: "{{ route_result.results }}"        
-
-    - name: Get clusters' aws region
-      ansible.builtin.shell: |
-        oc get infrastructure cluster -o jsonpath='{.status.platformStatus.aws.region}'
-      environment:
-        KUBECONFIG: "{{ item.config }}"
-      register: aws_region_result
-      loop:
-        - { name: "hub", config: "{{ HUBCONFIG }}" }
-        - { name: "spoke", config: "{{ SPOKECONFIG }}" }
-
-    - name: Set cluster aws region info dynamically
-      ansible.builtin.set_fact:
-        "{{ item.item.name }}_aws_region": "{{ item.stdout }}"
-      loop: "{{ aws_region_result.results }}"        
-
-    - name: We only support clusters in the same region
-      ansible.builtin.assert:
-        that:
-          - hub_aws_region == spoke_aws_region
-        fail_msg: "FATAL: we do not support clusters in different regions for now"
-      # FIXME: for now we skip this check
-      failed_when: false
-
-    - name: Set aws region
-      ansible.builtin.set_fact:
-        aws_region: "{{ hub_aws_region }}"
-
-    - ansible.builtin.include_tasks: cleanup_task.yml
-      loop:
-        - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }
-        - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}" }
-      loop_control:
-        loop_var: ocp
 
     - name: Delete created key pair
       amazon.aws.ec2_key:
@@ -108,7 +40,7 @@
         profile: "{{ aws_profile }}"
         region: "{{ aws_region }}"
         filters:
-          "tag:Name": "test-client-{{ ocp.cluster_name }}"
+          "tag:Name": "test-client-{{ hub_cluster_name }}"
       register: ec2_node_info
     
     - name: Delete ec2 instance if it exists
@@ -125,3 +57,10 @@
           instance_ids:
             - "{{ instance_id }}"
           state: terminated
+
+    - ansible.builtin.include_tasks: cleanup_task.yml
+      loop:
+        - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }
+        - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}" }
+      loop_control:
+        loop_var: ocp
