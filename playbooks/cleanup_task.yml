@@ -40,6 +40,10 @@
     vars:
       get_route_server: "{{ get_route_server_raw.stdout | from_yaml }}"
 
+  - name: Print router server id
+    ansible.builtin.debug:
+      msg: "{{ route_server_id }}"
+
   - name: Get route server endpoint
     ansible.builtin.shell: |
       aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-server-endpoints \
@@ -49,9 +53,14 @@
 
   - name: Set the id of the route server endpoint
     ansible.builtin.set_fact:
-      route_server_endpoint_id: "{{ get_route_server_endpoint['RouteServerEndpoints'] | map(attribute='RouteServerEndpointId') | first }}"
+      route_server_endpoint_id: "{{ get_route_server_endpoint['RouteServerEndpoints'] | selectattr('State', 'equalto', 'available') | map(attribute='RouteServerEndpointId') | first }}"
     vars:
       get_route_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
+
+  - name: Print router server endpoint id
+    ansible.builtin.debug:
+      msg: "{{ route_server_endpoint_id }}"
+
   # TODO: wait here for all peers to be deleted
   - name: Delete route server endpoint (if not deleted)
     ansible.builtin.shell: |
