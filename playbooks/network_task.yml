@@ -2,35 +2,37 @@
 # loop:
 #   - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }
 #   - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}" }
+# loop_control:
+#   loop_var: ocp
 
-- name: Get worker node ip list for "{{ item.name }}"
+- name: Get worker node ip list for "{{ ocp.name }}"
   ansible.builtin.shell: |
     oc describe nodes -l node-role.kubernetes.io/worker | grep InternalIP: | awk {' print $2 '}
   environment:
-    KUBECONFIG: "{{ item.config }}"
+    KUBECONFIG: "{{ ocp.config }}"
   register: worker_nodes
 
-- name: Gather security group info for workers for "{{ item.name }}"
+- name: Gather security group info for workers for "{{ ocp.name }}"
   amazon.aws.ec2_security_group_info:
     profile: "{{ aws_profile }}"
     region: "{{ aws_region }}"
     filters:
       "tag:sigs.k8s.io/cluster-api-provider-aws/role": "node"
-      "tag:Name": "{{ item.cluster_name }}-*"
+      "tag:Name": "{{ ocp.cluster_name }}-*"
   register: ec2_security_group_info
 
-- name: Debug for "{{ item.name }} - {{ item.cluster_name }}"
+- name: Debug for "{{ ocp.name }} - {{ ocp.cluster_name }}"
   ansible.builtin.debug:
     msg: "ec2_security_group_info: {{ ec2_security_group_info }}"
 
-- name: Set vpc and sg id for "{{ item.name }}"
+- name: Set vpc and sg id for "{{ ocp.name }}"
   ansible.builtin.set_fact:
     sg_vpc_id: "{{ ec2_security_group_info.security_groups[0].vpc_id }}"
     sg_group_id: "{{ ec2_security_group_info.security_groups[0].group_id }}"
     sg_group_name: "{{ ec2_security_group_info.security_groups[0].group_name }}"
     sg_worker_description: "{{ ec2_security_group_info.security_groups[0].description }}"
 
-- name: Gather vpc subnet info for workers for "{{ item.name }}"
+- name: Gather vpc subnet info for workers for "{{ ocp.name }}"
   amazon.aws.ec2_vpc_subnet_info:
     profile: "{{ aws_profile }}"
     region: "{{ aws_region }}"
@@ -38,15 +40,15 @@
       vpc-id: "{{ sg_vpc_id }}"
   register: ec2_vpc_subnet_info
 
-- name: Set public subnet id for "{{ item.name }}"
+- name: Set public subnet id for "{{ ocp.name }}"
   ansible.builtin.set_fact: # only add the public subnet, and there will be only exactly one
     public_subnet_id: "{{ ec2_vpc_subnet_info.subnets |  selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
 
-- name: Set public subnet id for "{{ item.name }}"
+- name: Set full var public subnet id for "{{ ocp.name }}"
   ansible.builtin.set_fact: # only add the public subnet, and there will be only exactly one
-    "{{ item.name }}_public_subnet_id": "{{ ec2_vpc_subnet_info.subnets |  selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
+    "{{ ocp.name }}_public_subnet_id": "{{ ec2_vpc_subnet_info.subnets |  selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
 
-- name: Debug subnet for "{{ item.name }}"
+- name: Debug subnet for "{{ ocp.name }}"
   ansible.builtin.debug:
     msg: "public_subnet_id: {{ public_subnet_id }} - ec2_vpc_subnet_info: {{ ec2_vpc_subnet_info }}"
 
@@ -97,7 +99,7 @@
   amazon.aws.ec2_security_group:
     profile: "{{ aws_profile }}"
     region: "{{ aws_region }}"
-    name: test-client-{{ item.cluster_name }}-security-group
+    name: test-client-{{ ocp.cluster_name }}-security-group
     description: sec group for test client
     vpc_id: "{{ sg_vpc_id }}"
     rules:
@@ -110,7 +112,7 @@
 - name: Get route server
   ansible.builtin.shell: |
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-servers \
-    --filters Name=tag:Name,Values=test-routeserver-{{ item.cluster_name }} \
+    --filters Name=tag:Name,Values=test-routeserver-{{ ocp.cluster_name }} \
     --output json --no-cli-pager
   register: get_route_server_raw
 
@@ -118,7 +120,7 @@
   ansible.builtin.shell: |
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server \
     --amazon-side-asn {{ aws_route_server_asn }} \
-    --tag-specifications ResourceType=route-server,Tags=\[\{Key=Name,Value=test-routeserver-{{ item.cluster_name }}\}\] \
+    --tag-specifications ResourceType=route-server,Tags=\[\{Key=Name,Value=test-routeserver-{{ ocp.cluster_name }}\}\] \
     --output json --no-cli-pager
   when: get_route_server['RouteServers'] | selectattr('State', 'equalto', 'available') | length == 0
   vars:
@@ -127,7 +129,7 @@
 - name: Get route server
   ansible.builtin.shell: |
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-servers \
-    --filters Name=tag:Name,Values=test-routeserver-{{ item.cluster_name }} \
+    --filters Name=tag:Name,Values=test-routeserver-{{ ocp.cluster_name }} \
     --output json --no-cli-pager
   register: get_route_server_raw
 
@@ -146,7 +148,7 @@
 - name: Get route server endpoint
   ansible.builtin.shell: |
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-server-endpoints \
-    --filters Name=tag:Name,Values=test-routeserver-endpoint-{{ item.cluster_name }} \
+    --filters Name=tag:Name,Values=test-routeserver-endpoint-{{ ocp.cluster_name }} \
     --output json --no-cli-pager
   register: get_route_server_endpoint_raw
 
@@ -155,7 +157,7 @@
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server-endpoint \
     --route-server-id {{ route_server_id }} \
     --subnet-id {{ public_subnet_id }} \
-    --tag-specifications ResourceType=route-server-endpoint,Tags=\[\{Key=Name,Value=test-routeserver-endpoint-{{ item.cluster_name }}\}\] \
+    --tag-specifications ResourceType=route-server-endpoint,Tags=\[\{Key=Name,Value=test-routeserver-endpoint-{{ ocp.cluster_name }}\}\] \
     --output json --no-cli-pager
   when: get_route_server_endpoint['RouteServerEndpoints'] | selectattr('State', 'equalto', 'available') | length == 0
   vars:
@@ -164,7 +166,7 @@
 - name: Get route server endpoint
   ansible.builtin.shell: |
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 describe-route-server-endpoints \
-    --filters Name=tag:Name,Values=test-routeserver-endpoint-{{ item.cluster_name }} \
+    --filters Name=tag:Name,Values=test-routeserver-endpoint-{{ ocp.cluster_name }} \
     --output json --no-cli-pager
   register: get_route_server_endpoint_raw
   until: get_route_server_endpoint['RouteServerEndpoints'] | selectattr('State', 'equalto', 'available') | length != 0
@@ -189,7 +191,7 @@
   ansible.builtin.shell: |
     aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 create-route-server-peer \
     --route-server-endpoint-id {{ rse_id }} --peer-address {{ item }} --bgp-options PeerAsn={{ metallb_asn }},PeerLivenessDetection={{ aws_route_server_peer_detection }} \
-    --tag-specifications ResourceType=route-server-peer,Tags=\[\{Key=Name,Value={{ item.cluster_name }}-node-{{ item }}\}\] \
+    --tag-specifications ResourceType=route-server-peer,Tags=\[\{Key=Name,Value={{ ocp.cluster_name }}-node-{{ item }}\}\] \
     --output json --no-cli-pager
   loop: "{{ worker_nodes.stdout_lines }}"
 

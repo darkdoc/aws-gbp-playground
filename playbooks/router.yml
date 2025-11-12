@@ -127,6 +127,8 @@
       loop:
         - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }
         - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}" }
+      loop_control:
+        loop_var: ocp
 
     - name: Start an ec2 instance (test-client) 
       amazon.aws.ec2_instance:
