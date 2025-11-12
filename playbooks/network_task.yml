@@ -172,8 +172,8 @@
   until: get_route_server_endpoint['RouteServerEndpoints'] | selectattr('State', 'equalto', 'available') | length != 0
   vars:
     get_route_server_endpoint: "{{ get_route_server_endpoint_raw.stdout | from_yaml }}"
-  retries: 10
-  delay: 5
+  retries: 20
+  delay: 10
 
 - name: Print IP address of the route server endpoint
   ansible.builtin.debug:
