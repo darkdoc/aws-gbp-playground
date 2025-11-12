@@ -140,6 +140,15 @@
     vars:
       get_route_server: "{{ get_route_server_raw.stdout | from_yaml }}"
 
+- name: Delete frr ec2 instance
+  amazon.aws.ec2_instance:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    filters:
+      "tag:Name": "frr-ec2-{{ ocp.cluster_name }}"
+      instance-state-name: ["pending","running","shutting-down", "stopping", "stopped"]
+    state: terminated
+
 - name: Delete ec2 security group
   amazon.aws.ec2_security_group:
     profile: "{{ aws_profile }}"

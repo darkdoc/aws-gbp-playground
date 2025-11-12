@@ -1,0 +1,27 @@
+#cloud-config
+chpasswd:
+  expire: false
+user: ec2-user
+packages:
+- tmux
+- nc
+- traceroute
+- tcpdump
+- vim
+{% if ec2_enable_frr %}
+- frr
+write_files:
+- content: !!binary |
+    "{{ lookup('template', '../templates/daemons.j2') | b64encode }}"
+  path: /etc/frr/daemons
+- content: !!binary |
+    "{{ lookup('template', '../templates/frr.conf.j2') | b64encode }}"
+  path: /etc/frr/frr.conf
+- content: !!binary |
+    "{{ lookup('template', '../templates/vtysh.conf.j2') | b64encode }}"
+  path: /etc/frr/vtysh.conf
+runcmd:
+- [ systemctl, daemon-reload ]
+- [ systemctl, enable, frr.service ]
+- [ systemctl, start, --no-block, frr.service ]
+{% endif -%}

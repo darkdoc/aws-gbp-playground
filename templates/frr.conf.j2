@@ -1,0 +1,46 @@
+frr defaults traditional
+log file /var/log/frr/frr.log
+log timestamp precision 3
+!
+debug zebra nht
+debug bgp neighbor-events
+debug bgp nht
+debug bgp updates in
+debug bgp updates out
+{% if metallb_bfd_enable %}
+debug bfd peer
+{% endif -%}
+
+!
+router bgp 64512
+ timers bgp 3 15
+ no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
+ no bgp network import-check
+
+ neighbor metallb peer-group
+ neighbor metallb remote-as 65001
+{% for worker_node in worker_nodes.stdout_lines %}
+ neighbor {{ worker_node }} peer-group metallb
+{% if metallb_bfd_enable %}
+ neighbor {{ worker_node }} bfd
+{% endif %}
+{% endfor %}
+ address-family ipv4 unicast
+{% for worker_node in worker_nodes.stdout_lines %}
+    neighbor {{ worker_node }} next-hop-self
+    neighbor {{ worker_node }} activate
+{% endfor %}
+ exit-address-family
+!
+!
+{% if metallb_bfd_enable %}
+bfd
+{% for worker_node in worker_nodes.stdout_lines %}
+ peer {{ worker_node }} multihop local-address 10.0.101.167
+{% endfor %}
+ exit
+ !
+exit
+{% endif %}
+

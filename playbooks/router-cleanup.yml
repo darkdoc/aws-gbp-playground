@@ -24,6 +24,7 @@
         region: "{{ aws_region }}"
         filters:
           "tag:Name": "test-client-{{ hub_cluster_name }}"
+          instance-state-name: ["pending","running","shutting-down", "stopping", "stopped"]
       register: ec2_node_info
     
     - name: Delete ec2 instance if it exists

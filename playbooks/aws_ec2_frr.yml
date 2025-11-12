@@ -1,0 +1,51 @@
+
+- name: Start an ec2 instance (frr-{{ ocp.cluster_name }})
+  amazon.aws.ec2_instance:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    name: "frr-ec2-{{ ocp.cluster_name }}"
+    state: started
+    wait: true
+    vpc_subnet_id: "{{ public_subnet_id }}"
+    instance_type: "{{ test_client_ec2_instance_type }}"
+    key_name: "{{ test_client_ec2_ssh_key_name }}"
+    security_groups: "test-client-{{ ocp.cluster_name }}-security-group"
+    image_id: "{{ test_client_ec2_ami_image_id }}"
+    network:
+      assign_public_ip: true
+    user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
+  vars:
+    ec2_enable_frr: true
+
+- name: Gather the ec2 instance details (worker node, same AZ/subnet as ec2 client)
+  amazon.aws.ec2_instance_info:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    filters:
+      "tag:Name": "{{ ocp.cluster_name }}*-worker-*"
+      instance-state-name: ["pending","running"]
+      availability-zone: "{{ aws_az }}"
+  register: ec2_node_info
+  vars:
+    aws_az: "{{ aws_region }}a"
+
+- name: Get route table for client ec2
+  amazon.aws.ec2_vpc_route_table_info:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    filters:
+      association.subnet-id: "{{ public_subnet_id }}"
+  register: get_route_tables_raw
+
+- name: Set up route table for client ec2 to ocp woker node instance
+  amazon.aws.ec2_vpc_route_table:
+    profile: "{{ aws_profile }}"
+    region: "{{ aws_region }}"
+    vpc_id: "{{ sg_vpc_id }}"
+    route_table_id: "{{ rtb_id  }}"
+    routes:
+      - dest: 192.168.155.0/24
+        instance_id: "{{ ec2_id }}"
+  vars:
+    rtb_id: "{{ get_route_tables_raw['route_tables'] | map(attribute='route_table_id') | first }}"
+    ec2_id: "{{ ec2_node_info['instances'] | map(attribute='instance_id') | first }}"
