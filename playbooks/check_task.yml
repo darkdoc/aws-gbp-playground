@@ -36,6 +36,15 @@
   ansible.builtin.debug:
     msg: "HUBCONFIG: {{ HUBCONFIG }} - SPOKECONFIG: {{ SPOKECONFIG }}"
 
+- name: Check that both clusters are reachable
+  ansible.builtin.shell: |
+    oc cluster-info
+  environment:
+    KUBECONFIG: "{{ item }}"
+  loop:
+    - "{{ HUBCONFIG }}"
+    - "{{ SPOKECONFIG }}"
+
 - name: Get cluster routes and set facts
   ansible.builtin.shell: |
     oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}'
