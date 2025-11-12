@@ -87,6 +87,10 @@
           - vim
       register: client_instance_info
 
+    - name: Debug ec2 instance
+      ansible.builtin.debug:
+        msg: "{{ client_instance_info }}"
+
     - name: Create ENI in spoke's vpc subnet
       amazon.aws.ec2_eni:
         profile: "{{ aws_profile }}"
