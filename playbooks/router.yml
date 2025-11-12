@@ -72,7 +72,8 @@
           - proto: tcp
             from_port: 22
             to_port: 22
-            cidr_ip: "{{ allow_cidrs }}"
+            cidr_ip: 
+              - 0.0.0.0/0
       register: sg
 
     - name: Start an ec2 instance (test-client)
