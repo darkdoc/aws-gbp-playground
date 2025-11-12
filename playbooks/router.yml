@@ -51,53 +51,48 @@
         - "{{ HUBCONFIG }}"
         - "{{ SPOKECONFIG }}"
 
-    - name: Get cluster route for HUB
+    - name: Get cluster routes and set facts
       ansible.builtin.shell: |
-        oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}' 
+        oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}'
       environment:
-        KUBECONFIG: "{{ HUBCONFIG }}"
-      register:
-        hub_route_raw
+        KUBECONFIG: "{{ item.config }}"
+      register: route_result
+      loop:
+        - { name: "hub", config: "{{ HUBCONFIG }}" }
+        - { name: "spoke", config: "{{ SPOKECONFIG }}" }
+    
+    - name: Set cluster route info dynamically
+      ansible.builtin.set_fact:
+        "{{ item.item.name }}_cluster_name": "{{ (item.stdout | split('.'))[1] }}"
+        "{{ item.item.name }}_fqdn": "{{ (item.stdout | split('.'))[1:] | join('.') }}"
+      loop: "{{ route_result.results }}"        
 
-    - name: Get cluster route for REGION
-      ansible.builtin.shell: |
-        oc get Ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}' 
-      environment:
-        KUBECONFIG: "{{ SPOKECONFIG }}"
-      register:
-        spoke_route_raw
-
-    - name: Get hub cluster's aws region
+    - name: Get clusters' aws region
       ansible.builtin.shell: |
         oc get infrastructure cluster -o jsonpath='{.status.platformStatus.aws.region}'
       environment:
-        KUBECONFIG: "{{ HUBCONFIG }}"
-      register:
-        hub_aws_region
+        KUBECONFIG: "{{ item.config }}"
+      register: aws_region_result
+      loop:
+        - { name: "hub", config: "{{ HUBCONFIG }}" }
+        - { name: "spoke", config: "{{ SPOKECONFIG }}" }
 
-    - name: Get spoke cluster's aws region
-      ansible.builtin.shell: |
-        oc get infrastructure cluster -o jsonpath='{.status.platformStatus.aws.region}'
-      environment:
-        KUBECONFIG: "{{ SPOKECONFIG }}"
-      register:
-        spoke_aws_region
+    - name: Set cluster aws region info dynamically
+      ansible.builtin.set_fact:
+        "{{ item.item.name }}_aws_region": "{{ item.stdout }}"
+      loop: "{{ aws_region_result.results }}"        
 
     - name: We only support clusters in the same region
       ansible.builtin.assert:
         that:
-          - spoke_aws_region.stdout == hub_aws_region.stdout
+          - hub_aws_region == spoke_aws_region
         fail_msg: "FATAL: we do not support clusters in different regions for now"
       # FIXME: for now we skip this check
       failed_when: false
 
-    - name: Set cluster info
+    - name: Set aws region
       ansible.builtin.set_fact:
-        hub_cluster_name: "{{ (hub_route_raw.stdout | split('.'))[1] }}"
-        hub_fqdn: "{{ (hub_route_raw.stdout | split('.'))[1:] | join('.') }}"
-        spoke_cluster_name: "{{ (spoke_route_raw.stdout | split('.'))[1] }}"
-        spoke_fqdn: "{{ (spoke_route_raw.stdout | split('.'))[1:] | join('.') }}"
-        aws_region: "{{ hub_aws_region.stdout }}"
+        aws_region: "{{ hub_aws_region }}"
 
     - name: Print AWS info
       ansible.builtin.debug:
