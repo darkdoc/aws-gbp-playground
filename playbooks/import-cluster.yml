@@ -1,0 +1,28 @@
+---
+- name: Importing ACM clusters automatically
+  hosts: localhost
+  connection: local
+  pre_tasks:
+    - name: Set HUBCONFIG and REGIONCONFIG facts from variables
+      ansible.builtin.set_fact:
+        HUBCONFIG: "{{ cluster_import_hub_config }}"
+        REGIONCONFIG: "{{ cluster_import_region_config }}"
+
+    - name: Check for correct HUBCONFIG variable
+      ansible.builtin.fail:
+        msg: "cluster_import_hub_config variable needs to be set and pointing to the HUB kubeconfig file"
+      when:
+        HUBCONFIG is not defined or HUBCONFIG | length == 0
+
+    - name: Check for correct REGIONCONFIG env variable
+      ansible.builtin.fail:
+        msg: "cluster_import_region_config variable needs to be set and pointing to the REGION kubeconfig file"
+      when:
+        REGIONCONFIG is not defined or REGIONCONFIG | length == 0
+
+    - name: Print the hub and regional kubeconfigs
+      ansible.builtin.debug:
+        msg: "HUBCONFIG: {{ HUBCONFIG }} - REGIONCONFIG: {{ REGIONCONFIG }}"
+
+  roles:
+    - ../roles/acm_import

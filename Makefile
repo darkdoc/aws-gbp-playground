@@ -17,3 +17,7 @@ bgp-routing: ## Sets up the BGP routing with a client ec2 in aws
 .PHONY: bgp-routing-cleanup
 bgp-routing-cleanup: ## Cleans up the BGP routing with a client ec2 in aws
 	ansible-playbook -i hosts $(EXTRA_ARGS) $(EXTRA_VARS) playbooks/router-cleanup.yml
+
+.PHONY: import
+import: ## Imports REGIONCONFIG into HUBCONFIG defined clusters
+	ansible-playbook -i hosts $(EXTRA_ARGS) $(EXTRA_VARS) playbooks/import-cluster.yml
