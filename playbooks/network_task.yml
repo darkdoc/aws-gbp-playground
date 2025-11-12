@@ -19,7 +19,7 @@
       "tag:Name": "{{ item.cluster_name }}-*"
   register: ec2_security_group_info
 
-- name: debug for "{{ item.name }} - {{ item.cluster_name }}"
+- name: Debug for "{{ item.name }} - {{ item.cluster_name }}"
   ansible.builtin.debug:
     msg: "ec2_security_group_info: {{ ec2_security_group_info }}"
 
@@ -41,6 +41,10 @@
 - name: Set public subnet id for "{{ item.name }}"
   ansible.builtin.set_fact: # only add the public subnet, and there will be only exactly one
     public_subnet_id: "{{ ec2_vpc_subnet_info.subnets |  selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
+
+- name: Set public subnet id for "{{ item.name }}"
+  ansible.builtin.set_fact: # only add the public subnet, and there will be only exactly one
+    "{{ item.name }}_public_subnet_id": "{{ ec2_vpc_subnet_info.subnets |  selectattr('map_public_ip_on_launch', '==', true) | map(attribute='subnet_id') | first }}"
 
 - name: Debug subnet for "{{ item.name }}"
   ansible.builtin.debug:
@@ -102,32 +106,6 @@
         - 22
       group_id: "{{ sg_group_id }}"
       rule_desc: allow ssh from the ocp workers to debug
-
-- name: Start an ec2 instance (test-client)
-  amazon.aws.ec2_instance:
-    profile: "{{ aws_profile }}"
-    region: "{{ aws_region }}"
-    name: "test-client-{{ item.cluster_name }}"
-    state: started
-    wait: true
-    vpc_subnet_id: "{{ public_subnet_id }}"
-    instance_type: "{{ test_client_ec2_instance_type }}"
-    key_name: "{{ test_client_ec2_ssh_key_name }}"
-    security_group: test-client-{{ item.cluster_name }}-security-group
-    image_id: "{{ test_client_ec2_ami_image_id }}"
-    user_data: |
-      #cloud-config
-      chpasswd:
-        expire: false
-      password: {{ test_client_ec2_user_password }}
-      ssh_pwauth: true
-      user: ec2-user
-      packages:
-      - tmux
-      - nc
-      - traceroute
-      - tcpdump
-      - vim
 
 - name: Get route server
   ansible.builtin.shell: |

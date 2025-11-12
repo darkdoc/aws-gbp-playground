@@ -128,6 +128,48 @@
         - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }
         - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}" }
 
-    - ansible.builtin.fail:
-        msg: "STOP"
+    - name: Start an ec2 instance (test-client) 
+      amazon.aws.ec2_instance:
+        profile: "{{ aws_profile }}"
+        region: "{{ aws_region }}"
+        name: "test-client-{{ hub_cluster_name }}"
+        state: started
+        wait: true
+        vpc_subnet_id: "{{ hub_public_subnet_id }}"
+        instance_type: "{{ test_client_ec2_instance_type }}"
+        key_name: "{{ test_client_ec2_ssh_key_name }}"
+        security_group: test-client-hub-security-group
+        image_id: "{{ test_client_ec2_ami_image_id }}"
+        user_data: |
+          #cloud-config
+          chpasswd:
+            expire: false
+          password: {{ test_client_ec2_user_password }}
+          ssh_pwauth: true
+          user: ec2-user
+          packages:
+          - tmux
+          - nc
+          - traceroute
+          - tcpdump
+          - vim
+      register: client_instance_info
 
+    - name: Create ENI in spoke's vpc subnet
+      amazon.aws.ec2_eni:
+        profile: "{{ aws_profile }}"
+        subnet_id: "{{ spoke_public_subnet_id }}" # ⬅️ Subnet in VPC B, but same AZ
+        security_groups: "test-client-spoke-security-group"
+        region: "{{ aws_region }}"
+        tags:
+          Name: "Spoke-vpc-nic"
+      register: eni_info
+
+    - name: Attach the Secondary ENI to the Instance
+      amazon.aws.ec2_eni:
+        profile: "{{ aws_profile }}"
+        eni_id: "{{ eni_info.eni.id }}"
+        instance_id: "{{ client_instance_info.instance_ids[0] }}"
+        device_index: 1  # ⬅️ Must be 1 or greater for a secondary NIC
+        state: attached
+        region: "{{ aws_region }}"
