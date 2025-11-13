@@ -90,4 +90,4 @@
 
 - name: Print AWS infos
   ansible.builtin.debug:
-    msg: "AWS Used: {{ aws_arn_userid }} - AWS Profile: {{ aws_profile }}"
+    msg: "AWS User: {{ aws_arn_userid }} - AWS Profile: {{ aws_profile }}"

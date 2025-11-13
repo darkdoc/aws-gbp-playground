@@ -113,10 +113,10 @@
 
   - name: Set the vpc-id from the route server association
     ansible.builtin.set_fact:
-      vpc_id: "{{ get_route_seget_route_server_association['RouteServerAssociations'] | map(attribute='VpcId') | first }}"
+      vpc_id: "{{ get_route_server_association['RouteServerAssociations'] | map(attribute='VpcId') | first }}"
     when: get_route_server_association_raw is not failed
     vars:
-      get_route_seget_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
+      get_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
 
   - name: Disassociate route server from vpc
     ansible.builtin.shell: |
@@ -125,9 +125,9 @@
       --vpc-id {{ vpc_id }}
     when:
       - get_route_server_association_raw is not failed
-      - (get_route_seget_route_server_association['RouteServerAssociations'] | map(attribute='State') | first) == 'associated'
+      - (get_route_server_association['RouteServerAssociations'] | map(attribute='State') | first) == 'associated'
     vars:
-      get_route_seget_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
+      get_route_server_association: "{{ get_route_server_association_raw.stdout | from_yaml }}"
     retries: 10
     delay: 10
 

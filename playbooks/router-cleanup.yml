@@ -1,5 +1,5 @@
 ---
-- name: Playbook to cleanup up the the BGP routing with a client ec2 in aws
+- name: Playbook to cleanup up the BGP routing with a client ec2 in aws
   hosts: localhost
   gather_facts: false
   become: false
@@ -61,7 +61,7 @@
     - name: Remove security group (ignore if attached)
       amazon.aws.ec2_group:
         profile: "{{ aws_profile }}"
-        name: "test-client-{{ aws_arn_userid }}-internet"
+        name: "internet-{{ aws_arn_userid }}"
         state: absent
         region: "{{ aws_region }}"
 
