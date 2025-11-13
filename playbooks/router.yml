@@ -166,4 +166,3 @@
         instance_id: "{{ client_instance_info.instance_ids[0] }}"
         device_index: 1  # ⬅️ Must be 1 or greater for a secondary NIC
         state: attached
-        region: "{{ aws_region }}"
