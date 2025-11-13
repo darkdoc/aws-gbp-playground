@@ -168,5 +168,7 @@
     # Modify the interface to enable the delete_on_terminaton flag
     - name: Make sure we delete the ENI when we remove the ec2 VM
       amazon.aws.ec2_eni:
+        profile: "{{ aws_profile }}"
+        region: "{{ aws_region }}"
         eni_id: "{{ eni_info.interface.id }}"
         delete_on_termination: true
