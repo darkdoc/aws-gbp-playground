@@ -1,19 +1,15 @@
 ---
 aws_profile: "default"
-aws_region: "eu-central-1"
 
 aws_ami_owner: 309956199498
 aws_ami_name: "RHEL-10*"
-
+aws_ami_arch: "x86_64"
 
 ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
 
-
-
-ocp_cluster_name: aeros-vp-hub
-ocp_region: "eu-central-1"
-
 aws_route_server_asn: 64512
+
+hosted_zone: aws.validatedpatterns.io.
 
 metallb_asn: 65001
 #TODO: changing this requires a redeploy (cleanup)
@@ -21,12 +17,6 @@ metallb_bfd: false # TODO: currently not working if set to true, bdf wont be hea
 
 aws_route_server_peer_detection: "{{ 'bfd' if metallb_bfd else 'bgp-keepalive' }}"
 
-test_client_ec2_ssh_key_name: aeros-ssh-key-rsa
-test_client_ec2_user_password: changeme
 test_client_ec2_instance_type: t2.micro
-test_client_ec2_ami_image_id: ami-005c89b47f40aa0e1 # rhel10
 
-
-cluster_import_hub_config: "{{ lookup('file', '/tmp/hub_kubeconfig' | expanduser) }}"
-cluster_import_region_config:  "{{ lookup('file', '/tmp/spoke_kubeconfig' | expanduser) }}"
-clustergroup: group-one
+clustergroup_label: group-one
