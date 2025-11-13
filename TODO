@@ -1,0 +1,3 @@
+- Fix the security group so the client can access workers on both spoke and hub (and on the nodes)
+- When deploying ingress pattern you need to tweak route server ips (maybe we can do this dynamically?)
+- Add the routes for the three workers on the spoke on the clients
