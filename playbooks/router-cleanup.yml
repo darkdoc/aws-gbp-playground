@@ -58,13 +58,6 @@
         type: A
         state: absent
 
-    - name: Remove security group (ignore if attached)
-      amazon.aws.ec2_group:
-        profile: "{{ aws_profile }}"
-        name: "internet-{{ aws_arn_userid }}"
-        state: absent
-        region: "{{ aws_region }}"
-
     - ansible.builtin.include_tasks: cleanup_task.yml
       loop:
         - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }

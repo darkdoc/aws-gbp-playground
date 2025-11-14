@@ -140,7 +140,6 @@
     vars:
       get_route_server: "{{ get_route_server_raw.stdout | from_yaml }}"
 
-# TODO: we can probably drop these (client is accessible from the internet via ssh)
 - name: Delete ec2 security group
   amazon.aws.ec2_security_group:
     profile: "{{ aws_profile }}"

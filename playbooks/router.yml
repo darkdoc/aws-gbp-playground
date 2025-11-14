@@ -45,21 +45,6 @@
       loop_control:
         loop_var: ocp
 
-    - name: Ensure security group exists
-      amazon.aws.ec2_group:
-        name: "internet-{{ aws_arn_userid }}"
-        description: "security group to allow internet access to the client"
-        region: "{{ aws_region }}"
-        vpc_id: "{{ hub_vpc_id }}"
-        profile: "{{ aws_profile }}"
-        rules:
-          - proto: tcp
-            from_port: 22
-            to_port: 22
-            cidr_ip: 
-              - 0.0.0.0/0
-      register: sg
-
     - name: Start an ec2 instance (test-client)
       amazon.aws.ec2_instance:
         profile: "{{ aws_profile }}"
@@ -70,7 +55,7 @@
         vpc_subnet_id: "{{ hub_public_subnet_id }}"
         instance_type: "{{ test_client_ec2_instance_type }}"
         key_name: "{{ test_client_ec2_ssh_key_name }}"
-        security_group: "{{ sg.group_id }}"
+        security_groups: "test-client-{{ hub_cluster_name }}-security-group"
         image_id: "{{ test_client_ec2_ami_image_id }}"
         network:
           assign_public_ip: true
