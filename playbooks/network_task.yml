@@ -60,21 +60,9 @@
     name: "{{ sg_group_name }}"
     description: "{{ sg_worker_description }}"
     rules:
-      - proto: tcp
-        ports:
-          - 179
-        cidr_ip: 10.0.0.0/16 # TODO: get this from the vpc
-        rule_desc: BGP port
-      - proto: tcp
-        ports:
-          - 80
-        cidr_ip: 10.0.0.0/16
-        rule_desc: HTTP for testing
-      - proto: udp
-        ports:
-          - 3784
-        cidr_ip: 10.0.0.0/16
-        rule_desc: BFD port
+      - proto: all
+        cidr_ip: 10.0.0.0/8 # TODO: get this from the vpc
+        rule_desc: All port from vpc
     purge_rules: false
 
 - name: Get NICs for a vpc
@@ -96,7 +84,6 @@
   when: item['private_ip_address'] in worker_nodes.stdout_lines
   loop: "{{ ec2_eni_info['network_interfaces'] }}"
 
-# TODO: we can probably drop these (client is accessible from the internet via ssh)
 - name: Create ec2 security group
   amazon.aws.ec2_security_group:
     profile: "{{ aws_profile }}"
@@ -105,11 +92,15 @@
     description: sec group for test client
     vpc_id: "{{ sg_vpc_id }}"
     rules:
+    - proto: all
+      cidr_ip: 10.0.0.0/8 # TODO: get this from the vpc
+      rule_desc: All port from vpc
     - proto: tcp
-      ports:
-        - 22
-      group_id: "{{ sg_group_id }}"
-      rule_desc: allow ssh from the ocp {{ ocp.cluster_name }} workers to debug
+      from_port: 22
+      to_port: 22
+      cidr_ip: 0.0.0.0/0
+      rule_desc: allow ssh access from the internet
+
 
 - name: Get route server
   ansible.builtin.shell: |
