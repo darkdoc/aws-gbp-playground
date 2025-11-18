@@ -7,19 +7,18 @@ aws_ami_arch: "x86_64"
 
 ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub' | expanduser) }}"
 
-aws_route_server_asn: 64512
-
 hosted_zone: aws.validatedpatterns.io.
 
-metallb_asn: 65001
-#TODO: changing this requires a redeploy (cleanup)
-metallb_bfd_enable: false # TODO: currently not working if set to true, bdf wont be healthy
+metallb_aws_side_asn: 64512       # This is needed for the bgp peering on both side (aws infra and ocp cluster)
+metallb_openshift_side_asn: 65001 # This is needed for the bgp peering on both side (aws infra and ocp cluster)
+metallb_address_pool: 192.168.155.0/24
+metallb_bfd_enable: false         # Change to true to enable bgo+bfd
+# TODO: changing the above when using aws route server requires a redeploy, but
+# currently not working if set to true when using aws route server, bfd wont be healthy
 
-aws_route_server: true # Set this variable to false to use an ec2 with frr as a TOR instead of using the aws native implementation
+aws_route_server: true            # Change this variable to false to use an ec2 with frr as a TOR instead of using the aws native implementation
 aws_route_server_peer_detection: "{{ 'bfd' if metallb_bfd_enable else 'bgp-keepalive' }}"
 
-test_client_ec2_instance_type: t2.micro
+aws_ec2_instance_type: t2.micro   # This will be used for both the client ec2 and the frr ec2
 
 clustergroup_label: group-one
-test_client_ec2_frr: false # Set this variable to true to use an ec2 with frr as a TOR instead of using the aws native implementation
-test_client_ec2_frr_bfd: false

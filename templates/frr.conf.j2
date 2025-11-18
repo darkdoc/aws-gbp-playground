@@ -12,14 +12,14 @@ debug bfd peer
 {% endif -%}
 
 !
-router bgp 64512
+router bgp {{ metallb_aws_side_asn }}
  timers bgp 3 15
  no bgp ebgp-requires-policy
  no bgp default ipv4-unicast
  no bgp network import-check
 
  neighbor metallb peer-group
- neighbor metallb remote-as 65001
+ neighbor metallb remote-as {{ metallb_openshift_side_asn }}
 {% for worker_node in worker_nodes.stdout_lines %}
  neighbor {{ worker_node }} peer-group metallb
 {% if metallb_bfd_enable %}
@@ -37,7 +37,7 @@ router bgp 64512
 {% if metallb_bfd_enable %}
 bfd
 {% for worker_node in worker_nodes.stdout_lines %}
- peer {{ worker_node }} multihop local-address 10.0.101.167
+ peer {{ worker_node }} multihop local-address {{ frr_private_ip }}
 {% endfor %}
  exit
  !
