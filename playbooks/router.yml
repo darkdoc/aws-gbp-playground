@@ -133,7 +133,16 @@
         ansible_user: ec2-user
         key: "{{ scanned_ip.stdout }}"
 
-    - name: Create ENI in spoke's vpc subnet
+    - name: Get ENI in spoke's vpc subnet
+      amazon.aws.ec2_eni_info:
+        profile: "{{ aws_profile }}"
+        region: "{{ aws_region }}"
+        filters:
+          attachment.instance-id: "{{ client_instance_info.instance_ids[0] }}"
+          subnet-id: "{{ spoke_public_subnet_id }}"
+      register: ec2_eni_info_raw
+
+    - name: Create ENI in spoke's vpc subnet if not exists
       amazon.aws.ec2_eni:
         profile: "{{ aws_profile }}"
         region: "{{ aws_region }}"
@@ -144,16 +153,19 @@
         attached: true
         tags:
           Name: "{{ spoke_cluster_name }}-client-vpc-nic"
-      register: eni_info
+      register: eni_created
+      when: ec2_eni_info_raw['network_interfaces'] | length == 0
 
     - name: Debug eni info
       ansible.builtin.debug:
-        msg: "{{ eni_info }}"
+        msg: "{{ eni_created.interface.id if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id'] }}"
 
     # Modify the interface to enable the delete_on_terminaton flag
     - name: Make sure we delete the ENI when we remove the ec2 VM
       amazon.aws.ec2_eni:
         profile: "{{ aws_profile }}"
         region: "{{ aws_region }}"
-        eni_id: "{{ eni_info.interface.id }}"
+        eni_id: "{{ eni_id }}"
         delete_on_termination: true
+      vars:
+        eni_id: "{{ eni_created.interface.id if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id']  }}"
