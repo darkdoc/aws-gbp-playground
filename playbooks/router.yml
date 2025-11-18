@@ -59,18 +59,10 @@
         image_id: "{{ test_client_ec2_ami_image_id }}"
         network:
           assign_public_ip: true
-        user_data: |
-          #cloud-config
-          chpasswd:
-            expire: false
-          user: ec2-user
-          packages:
-          - tmux
-          - nc
-          - traceroute
-          - tcpdump
-          - vim
+        user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
       register: client_instance_info
+      vars:
+        ec2_enable_frr: false
 
     - name: Set instance facts
       ansible.builtin.set_fact:
