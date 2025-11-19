@@ -53,7 +53,7 @@
         state: started
         wait: true
         vpc_subnet_id: "{{ hub_public_subnet_id }}"
-        instance_type: "{{ test_client_ec2_instance_type }}"
+        instance_type: "{{ aws_ec2_instance_type }}"
         key_name: "{{ test_client_ec2_ssh_key_name }}"
         security_groups: "test-client-{{ hub_cluster_name }}-security-group"
         image_id: "{{ test_client_ec2_ami_image_id }}"
@@ -61,8 +61,6 @@
           assign_public_ip: true
         user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
       register: client_instance_info
-      vars:
-        ec2_enable_frr: false
 
     - name: Set instance facts
       ansible.builtin.set_fact:
@@ -161,3 +159,18 @@
         delete_on_termination: true
       vars:
         eni_id: "{{ eni_created.interface.id if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id']  }}"
+
+    - name: Print FRR Private IPs
+      ansible.builtin.debug:
+        msg: "Hub IP: {{ hub_frr_private_ip }} - Spoke IP: {{ spoke_frr_private_ip }}"
+      when: aws_route_server is false
+
+
+  handlers:
+  - name: Restart frr on frr nodes
+    ansible.builtin.service:
+      name: frr
+      state: restarted
+    delegate_to: "{{ item }}"
+    become: true
+    loop: "{{ groups['frr_node'] }}"

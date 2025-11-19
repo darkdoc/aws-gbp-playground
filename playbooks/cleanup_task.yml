@@ -61,7 +61,6 @@
     ansible.builtin.debug:
       msg: "{{ route_server_endpoint_id }}"
 
-  # TODO: wait here for all peers to be deleted
   - name: Delete route server endpoint (if not deleted)
     ansible.builtin.shell: |
       aws --profile {{ aws_profile }} --region {{ aws_region }} ec2 delete-route-server-endpoint \

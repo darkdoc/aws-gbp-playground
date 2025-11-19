@@ -7,15 +7,84 @@
     state: started
     wait: true
     vpc_subnet_id: "{{ public_subnet_id }}"
-    instance_type: "{{ test_client_ec2_instance_type }}"
+    instance_type: "{{ aws_ec2_instance_type }}"
     key_name: "{{ test_client_ec2_ssh_key_name }}"
     security_groups: "test-client-{{ ocp.cluster_name }}-security-group"
     image_id: "{{ test_client_ec2_ami_image_id }}"
     network:
       assign_public_ip: true
     user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
-  vars:
-    ec2_enable_frr: true
+  register: frr_instance_info
+
+- name: Set instance facts
+  ansible.builtin.set_fact:
+    frr_public_ip: "{{ frr_instance_info.instances[0].public_ip_address }}"
+    frr_private_ip: "{{ frr_instance_info.instances[0].private_ip_address }}"
+    frr_instance_id: "{{ frr_instance_info.instances[0].instance_id }}"
+    "{{ ocp.name }}_frr_private_ip": "{{ frr_instance_info.instances[0].private_ip_address }}"
+
+- name: Show instance details
+  ansible.builtin.debug:
+    msg:
+      public_ip: "{{ frr_public_ip }}"
+      private_ip: "{{ frr_private_ip }}"
+      instance_id: "{{ frr_instance_id }}"
+
+- name: Wait for SSH to be available
+  ansible.builtin.wait_for:
+    host: "{{ frr_public_ip }}"
+    port: 22
+    timeout: "{{ wait_for_ssh_timeout }}"
+    state: started
+
+- name: Add new host to in-memory inventory
+  ansible.builtin.add_host:
+    name: "frr-ec2-{{ ocp.cluster_name }}"
+    ansible_host: "{{ frr_public_ip }}"
+    groups: ["frr_node"]
+    ansible_user: ec2-user
+
+- name: Configure frr on frr-ec2-{{ ocp.cluster_name }}
+  become: true
+  delegate_to: "frr-ec2-{{ ocp.cluster_name }}"
+  block:
+  - name: Ensure packages are installed on frr-ec2-{{ ocp.cluster_name }}
+    ansible.builtin.dnf:
+      name:
+      - frr
+      state: present
+      update_cache: yes
+
+  - name: Create frr config on frr-ec2-{{ ocp.cluster_name }}
+    ansible.builtin.template:
+      src: ../templates/frr.conf.j2
+      dest: /etc/frr/frr.conf
+    notify: Restart frr on frr nodes
+
+  - name: Create frr daemons config on frr-ec2-{{ ocp.cluster_name }}
+    ansible.builtin.template:
+      src: ../templates/daemons.j2
+      dest: /etc/frr/daemons
+    notify: Restart frr on frr nodes
+
+  - name: Create vtysh config on frr-ec2-{{ ocp.cluster_name }}
+    ansible.builtin.template:
+      src: ../templates/vtysh.conf.j2
+      dest: /etc/frr/vtysh.conf
+    notify: Restart frr on frr nodes
+
+  - name: Create vtysh config on frr-ec2-{{ ocp.cluster_name }}
+    ansible.builtin.template:
+      src: ../templates/vtysh.conf.j2
+      dest: /etc/frr/vtysh.conf
+    notify: Restart frr on frr nodes
+
+  - name: "Enable and start the frr Service"
+    ansible.builtin.service:
+      name: frr
+      enabled: true
+      state: started
+    notify: Restart frr on frr nodes
 
 - name: Gather the ec2 instance details (worker node, same AZ/subnet as ec2 client)
   amazon.aws.ec2_instance_info:
@@ -44,7 +113,7 @@
     vpc_id: "{{ sg_vpc_id }}"
     route_table_id: "{{ rtb_id  }}"
     routes:
-      - dest: 192.168.155.0/24
+      - dest: "{{ metallb_address_pool }}"
         instance_id: "{{ ec2_id }}"
   vars:
     rtb_id: "{{ get_route_tables_raw['route_tables'] | map(attribute='route_table_id') | first }}"
