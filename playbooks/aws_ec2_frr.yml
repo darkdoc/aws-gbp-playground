@@ -37,18 +37,12 @@
     timeout: "{{ wait_for_ssh_timeout }}"
     state: started
 
-- name: Fetch host key via ssh-keyscan ip
-  ansible.builtin.command: "ssh-keyscan -H {{ frr_public_ip }}"
-  register: scanned_ip
-  changed_when: false
-
 - name: Add new host to in-memory inventory
   ansible.builtin.add_host:
     name: "frr-ec2-{{ ocp.cluster_name }}"
     ansible_host: "{{ frr_public_ip }}"
     groups: ["frr_node"]
     ansible_user: ec2-user
-    key: "{{ scanned_ip.stdout }}"
 
 - name: Configure frr on frr-ec2-{{ ocp.cluster_name }}
   become: true
