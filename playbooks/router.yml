@@ -160,6 +160,12 @@
       vars:
         eni_id: "{{ eni_created.interface.id if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id']  }}"
 
+    - name: Print FRR Private IPs
+      ansible.builtin.debug:
+        msg: "Hub IP: {{ hub_frr_private_ip }} - Spoke IP: {{ spoke_frr_private_ip }}"
+      when: aws_route_server is false
+
+
   handlers:
   - name: Restart frr on frr nodes
     ansible.builtin.service:
