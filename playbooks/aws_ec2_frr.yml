@@ -21,6 +21,7 @@
     frr_public_ip: "{{ frr_instance_info.instances[0].public_ip_address }}"
     frr_private_ip: "{{ frr_instance_info.instances[0].private_ip_address }}"
     frr_instance_id: "{{ frr_instance_info.instances[0].instance_id }}"
+    "{{ ocp.name }}_frr_private_ip": "{{ frr_instance_info.instances[0].private_ip_address }}"
 
 - name: Show instance details
   ansible.builtin.debug:
