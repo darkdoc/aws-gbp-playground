@@ -112,6 +112,8 @@
     region: "{{ aws_region }}"
     vpc_id: "{{ sg_vpc_id }}"
     route_table_id: "{{ rtb_id  }}"
+    lookup: id
+    purge_routes: false
     routes:
       - dest: "{{ metallb_address_pool }}"
         instance_id: "{{ ec2_id }}"
