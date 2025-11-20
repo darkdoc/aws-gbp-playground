@@ -59,6 +59,9 @@
     ansible.builtin.template:
       src: ../templates/frr.conf.j2
       dest: /etc/frr/frr.conf
+    vars:
+      frr_nodes: "{{ worker_nodes.stdout_lines }}"
+      frr_local_ip: "{{ frr_private_ip }}"
     notify: Restart frr on frr nodes
 
   - name: Create frr daemons config on frr-ec2-{{ ocp.cluster_name }}

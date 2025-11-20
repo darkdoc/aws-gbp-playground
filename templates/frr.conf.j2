@@ -20,27 +20,26 @@ router bgp {{ metallb_aws_side_asn }}
 
  neighbor metallb peer-group
  neighbor metallb remote-as {{ metallb_openshift_side_asn }}
-{% for worker_node in worker_nodes.stdout_lines %}
- neighbor {{ worker_node }} peer-group metallb
+{% for frr_node in frr_nodes %}
+ neighbor {{ frr_node }} peer-group metallb
 {% if metallb_bfd_enable %}
- neighbor {{ worker_node }} bfd
+ neighbor {{ frr_node }} bfd
 {% endif %}
 {% endfor %}
  address-family ipv4 unicast
-{% for worker_node in worker_nodes.stdout_lines %}
-    neighbor {{ worker_node }} next-hop-self
-    neighbor {{ worker_node }} activate
+{% for frr_node in frr_nodes %}
+    neighbor {{ frr_node }} next-hop-self
+    neighbor {{ frr_node }} activate
 {% endfor %}
  exit-address-family
 !
 !
 {% if metallb_bfd_enable %}
 bfd
-{% for worker_node in worker_nodes.stdout_lines %}
- peer {{ worker_node }} multihop local-address {{ frr_private_ip }}
+{% for frr_node in frr_nodes %}
+ peer {{ frr_node }} multihop local-address {{ frr_local_ip }}
 {% endfor %}
  exit
  !
 exit
 {% endif %}
-

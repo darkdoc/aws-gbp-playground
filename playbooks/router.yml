@@ -110,18 +110,12 @@
         timeout: "{{ wait_for_ssh_timeout }}"
         state: started
 
-    - name: Fetch host key via ssh-keyscan ip
-      ansible.builtin.command: "ssh-keyscan -H {{ client_public_ip }}"
-      register: scanned_ip
-      changed_when: false
-
     - name: Add new host to in-memory inventory
       ansible.builtin.add_host:
         name: "{{ fqdn_nodot }}"
         ansible_host: "{{ client_public_ip }}"
         groups: ["client_node"]
         ansible_user: ec2-user
-        key: "{{ scanned_ip.stdout }}"
 
     - name: Get ENI in spoke's vpc subnet
       amazon.aws.ec2_eni_info:
@@ -164,6 +158,50 @@
       ansible.builtin.debug:
         msg: "Hub IP: {{ hub_frr_private_ip }} - Spoke IP: {{ spoke_frr_private_ip }}"
       when: aws_route_server is false
+
+    - name: Configure frr on client {{ fqdn_nodot }}
+      become: true
+      delegate_to: "{{ fqdn_nodot }}"
+      block:
+      - name: Ensure packages are installed on client {{ fqdn_nodot }}
+        ansible.builtin.dnf:
+          name:
+          - frr
+          state: present
+          update_cache: yes
+    
+      - name: Create frr config on client {{ fqdn_nodot }}
+        ansible.builtin.template:
+          src: ../templates/frr.conf.j2
+          dest: /etc/frr/frr.conf
+        vars:
+          metallb_openshift_side_asn: 64512
+          metallb_aws_side_asn: 12345
+          frr_local_ip: "{{ client_private_ip }}"
+          frr_nodes:
+            - "{{ hub_frr_private_ip }}"
+            - "{{ spoke_frr_private_ip }}"
+    
+      - name: Create frr daemons config on client {{ fqdn_nodot }}
+        ansible.builtin.template:
+          src: ../templates/daemons.j2
+          dest: /etc/frr/daemons
+    
+      - name: Create vtysh config on client {{ fqdn_nodot }}
+        ansible.builtin.template:
+          src: ../templates/vtysh.conf.j2
+          dest: /etc/frr/vtysh.conf
+    
+      - name: Create vtysh config on client {{ fqdn_nodot }}
+        ansible.builtin.template:
+          src: ../templates/vtysh.conf.j2
+          dest: /etc/frr/vtysh.conf
+    
+      - name: "Enable and start the frr Service"
+        ansible.builtin.service:
+          name: frr
+          enabled: true
+          state: restarted
 
 
   handlers:
