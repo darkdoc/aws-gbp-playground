@@ -103,11 +103,3 @@
       to_port: 22
       cidr_ip: 0.0.0.0/0
       rule_desc: allow ssh access from the internet
-
-- name: Create aws route server infrastructure
-  ansible.builtin.include_tasks: aws_route_server.yml
-  when: aws_route_server
-
-- name: Create aws frr ec2 infrastructure
-  ansible.builtin.include_tasks: aws_ec2_frr.yml
-  when: aws_route_server is false

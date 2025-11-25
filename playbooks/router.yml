@@ -55,17 +55,21 @@
         vpc_subnet_id: "{{ hub_public_subnet_id }}"
         instance_type: "{{ aws_ec2_instance_type }}"
         key_name: "{{ test_client_ec2_ssh_key_name }}"
+        source_dest_check: false
         security_groups: "test-client-{{ hub_cluster_name }}-security-group"
         image_id: "{{ test_client_ec2_ami_image_id }}"
         network:
           assign_public_ip: true
         user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
+      vars:
+        ec2_hostname: "test-client-{{ hub_cluster_name }}"
       register: client_instance_info
 
     - name: Set instance facts
       ansible.builtin.set_fact:
         client_public_ip: "{{ client_instance_info.instances[0].public_ip_address }}"
         client_private_ip: "{{ client_instance_info.instances[0].private_ip_address }}"
+        metallb_private_ip: "{{ client_instance_info.instances[0].private_ip_address }}"
         client_instance_id: "{{ client_instance_info.instances[0].instance_id }}"
 
     - name: Show instance details
@@ -142,7 +146,7 @@
 
     - name: Debug eni info
       ansible.builtin.debug:
-        msg: "{{ eni_created.interface.id if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id'] }}"
+        msg: "{{ eni_created.interface if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id'] }}"
 
     # Modify the interface to enable the delete_on_terminaton flag
     - name: Make sure we delete the ENI when we remove the ec2 VM
@@ -153,6 +157,39 @@
         delete_on_termination: true
       vars:
         eni_id: "{{ eni_created.interface.id if (ec2_eni_info_raw['network_interfaces'] | length == 0) else ec2_eni_info_raw['network_interfaces'][0]['id']  }}"
+
+    - name: Fetch client ec2
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        instance_ids:
+        - "{{ client_instance_id }}"
+      register: ec2_info
+
+    - name: Extract ALL private IPs on all enis on the client
+      ansible.builtin.set_fact:
+        client_spoke_private_ip: "{{ ec2_info.instances | community.general.json_query(spoke_query) | flatten | list | first }}"
+        client_hub_private_ip: "{{ ec2_info.instances | community.general.json_query(hub_query) | flatten | list | first }}"
+      vars:
+        spoke_query: "[0].network_interfaces[?subnet_id==`{{ spoke_public_subnet_id }}`].private_ip_addresses[].private_ip_address"
+        hub_query: "[0].network_interfaces[?subnet_id==`{{ hub_public_subnet_id }}`].private_ip_addresses[].private_ip_address"
+
+    - name: Create aws route server infrastructure
+      ansible.builtin.include_tasks: aws_route_server.yml
+      loop:
+        - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}" }
+        - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}" }
+      loop_control:
+        loop_var: ocp
+      when: aws_route_server
+
+    - name: Create aws frr ec2 infrastructure
+      ansible.builtin.include_tasks: aws_ec2_frr.yml
+      loop:
+        - { name: "hub", config: "{{ HUBCONFIG }}", cluster_name: "{{ hub_cluster_name }}", frr_client_leg_ip: "{{ client_hub_private_ip }}" }
+        - { name: "spoke", config: "{{ SPOKECONFIG }}", cluster_name: "{{ spoke_cluster_name }}", frr_client_leg_ip: "{{ client_spoke_private_ip }}" }
+      loop_control:
+        loop_var: ocp
+      when: aws_route_server is false
 
     - name: Print FRR Private IPs
       ansible.builtin.debug:
@@ -175,12 +212,14 @@
           src: ../templates/frr.conf.j2
           dest: /etc/frr/frr.conf
         vars:
-          metallb_openshift_side_asn: 64512
-          metallb_aws_side_asn: 12345
           frr_local_ip: "{{ client_private_ip }}"
-          frr_nodes:
-            - "{{ hub_frr_private_ip }}"
-            - "{{ spoke_frr_private_ip }}"
+          asn: "{{ metallb_client_side_asn }}"
+          bgp_neighbors:
+            tor:
+              - "{{ hub_frr_private_ip }}"
+              - "{{ spoke_frr_private_ip }}"
+          peer_asns:
+            tor: "{{ metallb_aws_side_asn }}"
     
       - name: Create frr daemons config on client {{ fqdn_nodot }}
         ansible.builtin.template:

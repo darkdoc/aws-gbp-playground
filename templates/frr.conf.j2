@@ -12,32 +12,37 @@ debug bfd peer
 {% endif -%}
 
 !
-router bgp {{ metallb_aws_side_asn }}
+router bgp {{ asn }}
  timers bgp 3 15
  no bgp ebgp-requires-policy
  no bgp default ipv4-unicast
  no bgp network import-check
 
- neighbor metallb peer-group
- neighbor metallb remote-as {{ metallb_openshift_side_asn }}
-{% for frr_node in frr_nodes %}
- neighbor {{ frr_node }} peer-group metallb
-{% if metallb_bfd_enable %}
- neighbor {{ frr_node }} bfd
-{% endif %}
+{% for group_name, ips in bgp_neighbors.items() %}
+ neighbor {{ group_name }} peer-group
+ neighbor {{ group_name }} remote-as {{ peer_asns[group_name] | default(65000) }}
+{% for ip in ips %}
+ neighbor {{ ip }} peer-group {{ group_name }}
+ neighbor {{ ip }} bfd
 {% endfor %}
+{% endfor %}
+
  address-family ipv4 unicast
-{% for frr_node in frr_nodes %}
-    neighbor {{ frr_node }} next-hop-self
-    neighbor {{ frr_node }} activate
+{% for group_name, ips in bgp_neighbors.items() %}
+{% for ip in ips %}
+    neighbor {{ ip }} next-hop-self
+    neighbor {{ ip }} activate
+{% endfor %}
 {% endfor %}
  exit-address-family
 !
 !
 {% if metallb_bfd_enable %}
 bfd
-{% for frr_node in frr_nodes %}
- peer {{ frr_node }} multihop local-address {{ frr_local_ip }}
+{% for group_name, ips in bgp_neighbors.items() %}
+{% for ip in ips %}
+ peer {{ ip }} multihop local-address {{ frr_local_ip }}
+{% endfor %}
 {% endfor %}
  exit
  !
