@@ -135,6 +135,7 @@
         profile: "{{ aws_profile }}"
         region: "{{ aws_region }}"
         subnet_id: "{{ spoke_public_subnet_id }}" # ⬅️ Subnet in VPC B, but same AZ
+        source_dest_check: false
         security_groups: "test-client-{{ spoke_cluster_name }}-security-group"
         instance_id: "{{ client_instance_info.instance_ids[0] }}"
         device_index: 1  # ⬅️ Must be 1 or greater for a secondary NIC
@@ -220,6 +221,7 @@
               - "{{ spoke_frr_private_ip }}"
           peer_asns:
             tor: "{{ metallb_aws_side_asn }}"
+          is_tor: false
     
       - name: Create frr daemons config on client {{ fqdn_nodot }}
         ansible.builtin.template:

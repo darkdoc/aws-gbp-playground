@@ -120,6 +120,7 @@
         metallb: "{{ metallb_openshift_side_asn }}"
         clientfrr: "{{ metallb_client_side_asn }}"
       frr_local_ip: "{{ frr_private_ip }}"
+      is_tor: true
     notify: Restart frr on frr nodes
 
   - name: Create frr daemons config on frr-ec2-{{ ocp.cluster_name }}

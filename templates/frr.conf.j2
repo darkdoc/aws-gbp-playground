@@ -28,6 +28,9 @@ router bgp {{ asn }}
 {% endfor %}
 
  address-family ipv4 unicast
+{% if is_tor | default(false) %}
+    network {{ metallb_address_pool }}
+{% endif %}
 {% for group_name, ips in bgp_neighbors.items() %}
 {% for ip in ips %}
     neighbor {{ ip }} next-hop-self
