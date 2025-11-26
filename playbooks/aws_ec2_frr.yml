@@ -119,7 +119,7 @@
       peer_asns:
         metallb: "{{ metallb_openshift_side_asn }}"
         clientfrr: "{{ metallb_client_side_asn }}"
-      bfp_localaddresses:
+      bfd_localaddresses:
         metallb:
           - "{{ frr_private_ip }}"
           - "{{ frr_private_ip }}"

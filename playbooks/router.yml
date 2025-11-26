@@ -230,7 +230,7 @@
             tor:
               - "{{ hub_frr_private_ip }}"
               - "{{ spoke_frr_private_ip }}"
-          bfp_localaddresses:
+          bfd_localaddresses:
             tor:
               - "{{ client_hub_private_ip }}"
               - "{{ client_spoke_private_ip }}"

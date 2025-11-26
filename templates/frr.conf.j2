@@ -44,7 +44,7 @@ router bgp {{ asn }}
 bfd
 {% for group_name, ips in bgp_neighbors.items() %}
 {% for ip in ips %}
- peer {{ ip }} multihop local-address {{ bfp_localaddresses[group_name][loop.index0] }}
+ peer {{ ip }} multihop local-address {{ bfd_localaddresses[group_name][loop.index0] }}
 {% endfor %}
 {% endfor %}
  exit
