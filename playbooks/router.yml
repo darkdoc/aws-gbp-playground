@@ -166,13 +166,25 @@
         - "{{ client_instance_id }}"
       register: ec2_info
 
-    - name: Extract ALL private IPs on all enis on the client
+    - name: Find network interfaces for each subnet
       ansible.builtin.set_fact:
-        client_spoke_private_ip: "{{ ec2_info.instances | community.general.json_query(spoke_query) | flatten | list | first }}"
-        client_hub_private_ip: "{{ ec2_info.instances | community.general.json_query(hub_query) | flatten | list | first }}"
-      vars:
-        spoke_query: "[0].network_interfaces[?subnet_id==`{{ spoke_public_subnet_id }}`].private_ip_addresses[].private_ip_address"
-        hub_query: "[0].network_interfaces[?subnet_id==`{{ hub_public_subnet_id }}`].private_ip_addresses[].private_ip_address"
+        spoke_eni_list: "{{ ec2_info.instances[0].network_interfaces | selectattr('subnet_id', 'equalto', spoke_public_subnet_id) | list }}"
+        hub_eni_list: "{{ ec2_info.instances[0].network_interfaces | selectattr('subnet_id', 'equalto', hub_public_subnet_id) | list }}"
+
+    - name: Validate network interfaces were found
+      ansible.builtin.assert:
+        that:
+          - spoke_eni_list | length > 0
+          - hub_eni_list | length > 0
+        fail_msg: |
+          Failed to find network interfaces:
+          - Spoke subnet {{ spoke_public_subnet_id }}: {{ spoke_eni_list | length }} interface(s) found
+          - Hub subnet {{ hub_public_subnet_id }}: {{ hub_eni_list | length }} interface(s) found
+
+    - name: Extract private IPs from network interfaces
+      ansible.builtin.set_fact:
+        client_spoke_private_ip: "{{ spoke_eni_list[0].private_ip_addresses[0].private_ip_address }}"
+        client_hub_private_ip: "{{ hub_eni_list[0].private_ip_addresses[0].private_ip_address }}"
 
     - name: Create aws route server infrastructure
       ansible.builtin.include_tasks: aws_route_server.yml
@@ -230,11 +242,6 @@
         ansible.builtin.template:
           src: ../templates/daemons.j2
           dest: /etc/frr/daemons
-    
-      - name: Create vtysh config on client {{ fqdn_nodot }}
-        ansible.builtin.template:
-          src: ../templates/vtysh.conf.j2
-          dest: /etc/frr/vtysh.conf
     
       - name: Create vtysh config on client {{ fqdn_nodot }}
         ansible.builtin.template:
