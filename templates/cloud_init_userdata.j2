@@ -2,10 +2,6 @@
 chpasswd:
   expire: false
 user: ec2-user
-hostname: {{ ec2_hostname }}
-fqdn: {{ ec2_hostname }}.compute.internal
-manage_etc_hosts: true
-preserve_hostname: true
 packages:
 - tmux
 - nc

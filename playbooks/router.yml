@@ -61,8 +61,6 @@
         network:
           assign_public_ip: true
         user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
-      vars:
-        ec2_hostname: "test-client-{{ hub_cluster_name }}"
       register: client_instance_info
 
     - name: Set instance facts
@@ -213,6 +211,11 @@
       become: true
       delegate_to: "{{ fqdn_nodot }}"
       block:
+      - name: Set hostname on {{ fqdn }}
+        ansible.builtin.hostname:
+          name: "test-client-{{ hub_cluster_name }}"
+          use: systemd
+
       - name: Ensure packages are installed on client {{ fqdn_nodot }}
         ansible.builtin.dnf:
           name:

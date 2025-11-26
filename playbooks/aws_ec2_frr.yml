@@ -64,8 +64,6 @@
     network:
       assign_public_ip: true
     user_data: "{{ lookup('template', '../templates/cloud_init_userdata.j2') | b64encode }}"
-  vars:
-    ec2_hostname: "frr-ec2-{{ ocp.cluster_name }}"
   register: frr_instance_info
 
 - name: Set instance facts
@@ -100,6 +98,11 @@
   become: true
   delegate_to: "frr-ec2-{{ ocp.cluster_name }}"
   block:
+  - name: Set hostname on frr-ec2-{{ ocp.cluster_name }}
+    ansible.builtin.hostname:
+      name: "frr-ec2-{{ ocp.cluster_name }}"
+      use: systemd
+
   - name: Ensure packages are installed on frr-ec2-{{ ocp.cluster_name }}
     ansible.builtin.dnf:
       name:
