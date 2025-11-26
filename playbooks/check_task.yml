@@ -76,13 +76,20 @@
     "{{ item.item.name }}_aws_region": "{{ item.stdout }}"
   loop: "{{ aws_region_result.results }}"        
 
-- name: We only support clusters in the same region
+- name: Check if clusters are in different regions
+  ansible.builtin.debug:
+    msg: "WARNING: Hub cluster is in {{ hub_aws_region }}, spoke cluster is in {{ spoke_aws_region }}. Multi-region support is experimental."
+  when: hub_aws_region != spoke_aws_region
+
+- name: Validate clusters are in the same region (unless explicitly overridden)
   ansible.builtin.assert:
     that:
-      - hub_aws_region == spoke_aws_region
-    fail_msg: "FATAL: we do not support clusters in different regions for now"
-  # FIXME: for now we skip this check
-  failed_when: false
+      - hub_aws_region == spoke_aws_region or allow_different_regions | default(false)
+    fail_msg: |
+      FATAL: Clusters are in different regions (hub: {{ hub_aws_region }}, spoke: {{ spoke_aws_region }}).
+      Multi-region support is not fully implemented.
+      If you want to proceed anyway, set 'allow_different_regions: true' in your overrides.yml file.
+      WARNING: This may result in connectivity issues or deployment failures.
 
 - name: Set aws region
   ansible.builtin.set_fact:
