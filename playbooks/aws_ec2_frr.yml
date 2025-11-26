@@ -1,5 +1,6 @@
 - name: Get worker node ip list for "{{ ocp.name }}"
   ansible.builtin.shell: |
+    set -e -o pipefail
     oc describe nodes -l node-role.kubernetes.io/worker | grep InternalIP: | awk '{ print $2 }'
   environment:
     KUBECONFIG: "{{ ocp.config }}"
