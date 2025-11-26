@@ -213,12 +213,15 @@
           src: ../templates/frr.conf.j2
           dest: /etc/frr/frr.conf
         vars:
-          frr_local_ip: "{{ client_private_ip }}"
           asn: "{{ metallb_client_side_asn }}"
           bgp_neighbors:
             tor:
               - "{{ hub_frr_private_ip }}"
               - "{{ spoke_frr_private_ip }}"
+          bfp_localaddresses:
+            tor:
+              - "{{ client_hub_private_ip }}"
+              - "{{ client_spoke_private_ip }}"
           peer_asns:
             tor: "{{ metallb_aws_side_asn }}"
           is_tor: false
